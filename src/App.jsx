@@ -32,6 +32,19 @@ const CATEGORIES = [
   "অন্যান্য ক্যাটাগরি",
 ];
 
+const CATEGORY_ICONS = {
+  "ছেলেদের পোশাক": "👕",
+  "বেবি কালেকশন": "👶",
+  "কাপল কম্বো": "💑",
+  "গৃহ সামগ্রী": "🏠",
+  "ব্যাগ কালেকশন": "👜",
+  "জুয়েলারি এন্ড এক্সেসরিজ": "💍",
+  "ইলেকট্রনিক্স এন্ড গ্যাজেট": "🔌",
+  "শীতের কালেকশন": "🧥",
+  "সিজনাল প্রোডাক্ট": "🎉",
+  "অন্যান্য ক্যাটাগরি": "🛍️",
+};
+
 const SEED_PRODUCTS = [
   { id: "p1", title: "রেগুলার ফিট শার্ট", cat: "ছেলেদের পোশাক", price: 650, discount: 550, sizes: ["S", "M", "L", "XL"], colors: ["কালো", "নেভি"], seed: "shirt1", desc: "কটন ফেব্রিক, রেগুলার ফিট" },
   { id: "p2", title: "প্রিন্ট টি-শার্ট", cat: "ছেলেদের পোশাক", price: 450, discount: 380, sizes: ["M", "L", "XL"], colors: ["সাদা", "গ্রে"], seed: "shirt2", desc: "হাফ হাতা, সফট কটন" },
@@ -74,10 +87,11 @@ function useHashRoute() {
 
 function ProductCard({ p, onOpen, onAdd }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
+  const imgSrc = p.image && p.image.trim() ? p.image : `https://picsum.photos/seed/${p.seed || p.id}/400/500`;
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: PALETTE.card }}>
       <div className="aspect-[4/5] overflow-hidden cursor-pointer" onClick={() => onOpen(p)}>
-        <img src={`https://picsum.photos/seed/${p.seed}/400/500`} alt={p.title} className="w-full h-full object-cover" />
+        <img src={imgSrc} alt={p.title} className="w-full h-full object-cover" />
       </div>
       <div className="p-3">
         <h3 className="font-semibold text-[14px] leading-snug cursor-pointer" onClick={() => onOpen(p)}>{p.title}</h3>
@@ -297,7 +311,7 @@ export default function App() {
                 const price = i.product.discount && i.product.discount > 0 ? i.product.discount : i.product.price;
                 return (
                   <div key={i.key} className="flex gap-3">
-                    <img src={`https://picsum.photos/seed/${i.product.seed}/100/120`} className="w-14 h-16 object-cover rounded-lg" alt={i.product.title} />
+                    <img src={i.product.image && i.product.image.trim() ? i.product.image : `https://picsum.photos/seed/${i.product.seed || i.product.id}/100/120`} className="w-14 h-16 object-cover rounded-lg" alt={i.product.title} />
                     <div className="flex-1">
                       <p className="text-sm font-semibold">{i.product.title}</p>
                       <p className="text-[11px]" style={{ color: PALETTE.muted }}>{i.size} • {i.color}</p>
@@ -348,6 +362,35 @@ function HomeView({ products, navigate, onAdd, copyLink }) {
       <section>
         <img src={BANNER} alt="2LS Bazar Banner" className="w-full object-cover" />
       </section>
+
+      <div className="max-w-5xl mx-auto px-4 py-5">
+        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+          {CATEGORIES.map((cat) => {
+            const count = products.filter((p) => p.cat === cat).length;
+            return (
+              <button
+                key={cat}
+                onClick={() => navigate(`#/category/${slugify(cat)}`)}
+                className="flex flex-col items-center gap-1.5 flex-shrink-0"
+                style={{ width: 76 }}
+              >
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
+                  style={{ background: PALETTE.orangeSoft }}
+                >
+                  {CATEGORY_ICONS[cat] || "🛍️"}
+                </div>
+                <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+                  {cat}
+                </span>
+                <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+                  ({count})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <div className="max-w-5xl mx-auto px-4 py-6">
         {CATEGORIES.map((cat) => {
           const items = products.filter((p) => p.cat === cat);
@@ -419,13 +462,14 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
     );
   }
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
+  const imgSrc = p.image && p.image.trim() ? p.image : `https://picsum.photos/seed/${p.seed || p.id}/500/600`;
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <button onClick={() => navigate("#/")} className="flex items-center gap-1 text-sm mb-4 font-medium" style={{ color: PALETTE.blue }}>
         <ArrowLeft size={16} /> হোমে ফিরে যান
       </button>
       <div className="rounded-2xl overflow-hidden mb-4" style={{ background: PALETTE.card }}>
-        <img src={`https://picsum.photos/seed/${p.seed}/500/600`} alt={p.title} className="w-full aspect-[4/5] object-cover" />
+        <img src={imgSrc} alt={p.title} className="w-full aspect-[4/5] object-cover" />
       </div>
       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }}>{p.cat}</span>
       <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
@@ -602,12 +646,12 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
   const [form, setForm] = useState(emptyForm());
 
   function emptyForm() {
-    return { title: "", cat: CATEGORIES[0], price: "", discount: "", sizes: "", colors: "", desc: "", seed: "" };
+    return { title: "", cat: CATEGORIES[0], price: "", discount: "", sizes: "", colors: "", desc: "", image: "" };
   }
 
   const startEdit = (p) => {
     setEditing(p.id);
-    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", seed: p.seed });
+    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", image: p.image || "" });
   };
 
   const resetForm = () => { setEditing(null); setForm(emptyForm()); };
@@ -623,7 +667,8 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
       sizes: form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"],
       colors: form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"],
       desc: form.desc.trim(),
-      seed: form.seed.trim() || ("prod" + Date.now()),
+      image: form.image.trim(),
+      seed: "prod" + (editing || Date.now()),
     };
     let next;
     if (editing) next = products.map((p) => (p.id === editing ? payload : p));
@@ -651,13 +696,13 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
           style={{ borderColor: PALETTE.border }}
         />
         <button
-          onClick={() => (pass === "2lsbazar" ? setAuthed(true) : showAlert())}
+          onClick={() => (pass === "AVNU9To" ? setAuthed(true) : showAlert())}
           className="w-full py-2.5 rounded-full font-semibold"
           style={{ background: PALETTE.blue, color: "#fff" }}
         >
           প্রবেশ করুন
         </button>
-        <p className="text-xs mt-3" style={{ color: PALETTE.muted }}>ডিফল্ট পাসকোড: 2lsbazar (পরে বদলে নিতে বলবেন)</p>
+        <p className="text-xs mt-3" style={{ color: PALETTE.muted }}>শুধু তোমার জন্য — পাসকোড দিয়ে প্রবেশ করো</p>
         <button onClick={() => navigate("#/")} className="mt-4 text-sm font-medium block mx-auto" style={{ color: PALETTE.blue }}>← হোমে ফিরে যান</button>
       </div>
     );
@@ -694,7 +739,7 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
               <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="সাইজ (কমা দিয়ে, যেমন: S, M, L)" value={form.sizes} onChange={(e) => setForm({ ...form, sizes: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="কালার (কমা দিয়ে)" value={form.colors} onChange={(e) => setForm({ ...form, colors: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              <input placeholder="ছবির লিংক (অপশনাল)" value={form.seed} onChange={(e) => setForm({ ...form, seed: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              <input placeholder="প্রোডাক্টের ছবির লিংক (Facebook/Drive থেকে কপি করা)" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <textarea placeholder="বিবরণ" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" rows={2} style={{ borderColor: PALETTE.border }} />
             </div>
             <div className="flex gap-2 mt-3">
@@ -708,7 +753,7 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
           <div className="space-y-2">
             {products.map((p) => (
               <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-                <img src={`https://picsum.photos/seed/${p.seed}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
+                <img src={p.image && p.image.trim() ? p.image : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{p.title}</p>
                   <p className="text-xs" style={{ color: PALETTE.muted }}>{p.cat} • <Taka amount={p.discount || p.price} /></p>
