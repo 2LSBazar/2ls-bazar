@@ -8,11 +8,24 @@ import {
   collection,
   getDocs,
 } from "firebase/firestore";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
 import { firebaseConfig } from "./firebaseConfig.js";
+
+// This is not a real email account — it's just an identifier Firebase Auth
+// uses internally. The admin logs in with the password set in the Firebase
+// Console (Authentication tab), not with this email.
+export const ADMIN_EMAIL = "admin@2lsbazar.internal";
 
 const isConfigured = Object.values(firebaseConfig).every(
   (v) => v && v !== "REPLACE_ME"
 );
+
+let authInstance = null;
 
 function installLocalStorageShim() {
   console.warn(
@@ -43,6 +56,7 @@ function installLocalStorageShim() {
 function installFirestoreShim() {
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  authInstance = getAuth(app);
   const COLLECTION = "shared_kv";
 
   window.storage = {
@@ -82,4 +96,25 @@ export function initStorage() {
     }
   }
   installLocalStorageShim();
+}
+
+// Signs the admin in using Firebase Authentication. Returns true on success,
+// false on wrong password. Throws only for unexpected/config errors.
+export async function adminSignIn(password) {
+  if (!authInstance) return false;
+  try {
+    await signInWithEmailAndPassword(authInstance, ADMIN_EMAIL, password);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function adminSignOut() {
+  if (authInstance) signOut(authInstance);
+}
+
+export function onAdminAuthChange(callback) {
+  if (!authInstance) return () => {};
+  return onAuthStateChanged(authInstance, (user) => callback(!!user));
 }

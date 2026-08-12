@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { adminSignIn } from "./storageShim.js";
 import {
   ShoppingBag, X, Plus, Minus, Check, ArrowLeft, Share2, Lock,
   Trash2, Pencil, Facebook, MessageCircle, Copy, LayoutDashboard, ClipboardList
@@ -641,6 +642,8 @@ function DoneView({ navigate, orders }) {
 function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [loginError, setLoginError] = useState(false);
   const [tab, setTab] = useState("products");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
@@ -683,6 +686,14 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
   };
 
   if (!authed) {
+    const tryLogin = async () => {
+      setChecking(true);
+      setLoginError(false);
+      const ok = await adminSignIn(pass);
+      setChecking(false);
+      if (ok) setAuthed(true);
+      else setLoginError(true);
+    };
     return (
       <div className="max-w-sm mx-auto px-4 py-20 text-center">
         <Lock size={32} color={PALETTE.blue} className="mx-auto mb-3" />
@@ -691,25 +702,22 @@ function AdminView({ products, orders, saveProducts, navigate, copyLink }) {
           type="password"
           value={pass}
           onChange={(e) => setPass(e.target.value)}
-          placeholder="পাসকোড দিন"
+          placeholder="পাসওয়ার্ড দিন"
           className="w-full px-3 py-2 rounded-lg border bg-white mb-3"
           style={{ borderColor: PALETTE.border }}
         />
         <button
-          onClick={() => (pass === "AVNU9To" ? setAuthed(true) : showAlert())}
+          onClick={tryLogin}
+          disabled={checking}
           className="w-full py-2.5 rounded-full font-semibold"
-          style={{ background: PALETTE.blue, color: "#fff" }}
+          style={{ background: PALETTE.blue, color: "#fff", opacity: checking ? 0.6 : 1 }}
         >
-          প্রবেশ করুন
+          {checking ? "যাচাই হচ্ছে..." : "প্রবেশ করুন"}
         </button>
-        <p className="text-xs mt-3" style={{ color: PALETTE.muted }}>শুধু তোমার জন্য — পাসকোড দিয়ে প্রবেশ করো</p>
+        {loginError && <p className="text-xs mt-3" style={{ color: PALETTE.orange }}>পাসওয়ার্ড ভুল হয়েছে</p>}
         <button onClick={() => navigate("#/")} className="mt-4 text-sm font-medium block mx-auto" style={{ color: PALETTE.blue }}>← হোমে ফিরে যান</button>
       </div>
     );
-  }
-
-  function showAlert() {
-    alert("পাসকোড ভুল হয়েছে");
   }
 
   return (
