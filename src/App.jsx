@@ -358,6 +358,49 @@ export default function App() {
   );
 }
 
+function InfiniteCategoryStrip({ products, navigate }) {
+  const list = [...CATEGORIES, ...CATEGORIES]; // duplicated for seamless loop
+  return (
+    <div className="overflow-hidden py-4" style={{ background: PALETTE.card }}>
+      <style>{`
+        @keyframes catmarquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .cat-marquee-track {
+          animation: catmarquee 28s linear infinite;
+        }
+      `}</style>
+      <div className="flex gap-4 cat-marquee-track" style={{ width: "max-content" }}>
+        {list.map((cat, i) => {
+          const count = products.filter((p) => p.cat === cat).length;
+          return (
+            <button
+              key={cat + i}
+              onClick={() => navigate(`#/category/${slugify(cat)}`)}
+              className="flex flex-col items-center gap-1.5 flex-shrink-0"
+              style={{ width: 76 }}
+            >
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
+                style={{ background: PALETTE.orangeSoft }}
+              >
+                {CATEGORY_ICONS[cat] || "🛍️"}
+              </div>
+              <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+                {cat}
+              </span>
+              <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+                ({count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function HomeView({ products, navigate, onAdd, copyLink }) {
   return (
     <>
@@ -365,55 +408,22 @@ function HomeView({ products, navigate, onAdd, copyLink }) {
         <img src={BANNER} alt="2LS Bazar Banner" className="w-full object-cover" />
       </section>
 
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-          {CATEGORIES.map((cat) => {
-            const count = products.filter((p) => p.cat === cat).length;
-            return (
-              <button
-                key={cat}
-                onClick={() => navigate(`#/category/${slugify(cat)}`)}
-                className="flex flex-col items-center gap-1.5 flex-shrink-0"
-                style={{ width: 76 }}
-              >
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
-                  style={{ background: PALETTE.orangeSoft }}
-                >
-                  {CATEGORY_ICONS[cat] || "🛍️"}
-                </div>
-                <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-                  {cat}
-                </span>
-                <span className="text-[10px]" style={{ color: PALETTE.muted }}>
-                  ({count})
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
       <div className="max-w-5xl mx-auto px-4 py-6">
         {CATEGORIES.map((cat) => {
           const items = products.filter((p) => p.cat === cat);
           if (items.length === 0) return null;
           return (
-            <div key={cat} className="mb-8">
+            <div key={cat} className="mb-9">
               <div className="flex items-center justify-between mb-3">
-                <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-lg font-bold">
+                <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-xl font-bold">
                   {cat} <span className="text-sm font-normal" style={{ color: PALETTE.muted }}>({items.length})</span>
                 </h3>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => copyLink(`#/category/${slugify(cat)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
-                    <Share2 size={13} /> শেয়ার
-                  </button>
-                  <button onClick={() => navigate(`#/category/${slugify(cat)}`)} className="text-xs font-semibold" style={{ color: PALETTE.orange }}>
-                    সব দেখুন →
-                  </button>
-                </div>
+                <button onClick={() => copyLink(`#/category/${slugify(cat)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
+                  <Share2 size={13} /> শেয়ার
+                </button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {items.slice(0, 4).map((p) => (
+                {items.map((p) => (
                   <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} />
                 ))}
               </div>
@@ -421,6 +431,8 @@ function HomeView({ products, navigate, onAdd, copyLink }) {
           );
         })}
       </div>
+
+      <InfiniteCategoryStrip products={products} navigate={navigate} />
     </>
   );
 }
@@ -451,18 +463,24 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
   );
 }
 
-function ImageCarousel({ images, title }) {
+function ImageCarousel({ images, title, forcedIndex }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     setIdx(0);
   }, [images]);
   useEffect(() => {
+    if (forcedIndex !== null && forcedIndex !== undefined) {
+      setIdx(forcedIndex);
+    }
+  }, [forcedIndex]);
+  useEffect(() => {
     if (images.length <= 1) return;
+    if (forcedIndex !== null && forcedIndex !== undefined) return; // color-linked, no auto-slide
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % images.length);
     }, 3000);
     return () => clearInterval(t);
-  }, [images.length]);
+  }, [images.length, forcedIndex]);
   return (
     <div className="mb-4">
       <div className="rounded-2xl overflow-hidden relative" style={{ background: PALETTE.card }}>
@@ -502,21 +520,43 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
   }
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
   const images = p.images && p.images.length > 0 ? p.images : [`https://picsum.photos/seed/${p.seed || p.id}/500/600`];
+  // If the number of images matches the number of colors, link color selection to a specific image (no auto-slide).
+  const colorLinked = p.colors && p.colors.length > 1 && images.length === p.colors.length;
+  const forcedIndex = colorLinked ? p.colors.indexOf(color) : null;
+  const relatedProducts = products.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 8);
+
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
       <button onClick={() => navigate("#/")} className="flex items-center gap-1 text-sm mb-4 font-medium" style={{ color: PALETTE.blue }}>
         <ArrowLeft size={16} /> হোমে ফিরে যান
       </button>
-      <ImageCarousel images={images} title={p.title} />
+
+      <ImageCarousel images={images} title={p.title} forcedIndex={forcedIndex} />
+
       <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }}>{p.cat}</span>
       <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
-      <p className="text-sm mt-1" style={{ color: PALETTE.muted }}>{p.desc}</p>
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={hasDiscount ? p.discount : p.price} /></span>
         {hasDiscount && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={p.price} /></span>}
       </div>
 
-      <div className="mt-4">
+      <div className="flex gap-2 mt-4">
+        <button onClick={() => onAdd(p, size, color)} className="flex-1 py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
+          কার্টে দিন
+        </button>
+        <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
+          <Share2 size={18} color={PALETTE.blue} />
+        </button>
+      </div>
+
+      {p.desc && (
+        <div className="mt-6">
+          <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-base font-bold mb-1">প্রোডাক্ট বিবরণ</h3>
+          <p className="text-sm" style={{ color: PALETTE.muted }}>{p.desc}</p>
+        </div>
+      )}
+
+      <div className="mt-5">
         <p className="text-sm font-semibold mb-1">সাইজ</p>
         <div className="flex gap-2 flex-wrap">
           {p.sizes.map((s) => (
@@ -537,14 +577,18 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
         </div>
       </div>
 
-      <div className="flex gap-2 mt-6">
-        <button onClick={() => onAdd(p, size, color)} className="flex-1 py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
-          কার্টে দিন
-        </button>
-        <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
-          <Share2 size={18} color={PALETTE.blue} />
-        </button>
-      </div>
+      {relatedProducts.length > 0 && (
+        <div className="mt-9">
+          <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-lg font-bold mb-3">
+            {p.cat}-এ আরও আছে
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            {relatedProducts.map((rp) => (
+              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes[0], pp.colors[0])} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
