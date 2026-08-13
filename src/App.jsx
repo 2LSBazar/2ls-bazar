@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { adminSignIn } from "./storageShim.js";
 import {
   ShoppingBag, X, Plus, Minus, Check, ArrowLeft, Share2, Lock,
@@ -23,6 +23,7 @@ const PALETTE = {
 
 const CATEGORIES = [
   "ছেলেদের পোশাক",
+  "মেয়েদের পোশাক",
   "বেবি কালেকশন",
   "কাপল কম্বো",
   "গৃহ সামগ্রী",
@@ -30,12 +31,15 @@ const CATEGORIES = [
   "জুয়েলারি এন্ড এক্সেসরিজ",
   "ইলেকট্রনিক্স এন্ড গ্যাজেট",
   "শীতের কালেকশন",
+  "হোম কেয়ার",
+  "পার্সোনাল কেয়ার",
   "সিজনাল প্রোডাক্ট",
   "অন্যান্য ক্যাটাগরি",
 ];
 
 const CATEGORY_ICONS = {
   "ছেলেদের পোশাক": "👕",
+  "মেয়েদের পোশাক": "👗",
   "বেবি কালেকশন": "👶",
   "কাপল কম্বো": "💑",
   "গৃহ সামগ্রী": "🏠",
@@ -43,6 +47,8 @@ const CATEGORY_ICONS = {
   "জুয়েলারি এন্ড এক্সেসরিজ": "💍",
   "ইলেকট্রনিক্স এন্ড গ্যাজেট": "🔌",
   "শীতের কালেকশন": "🧥",
+  "হোম কেয়ার": "🧹",
+  "পার্সোনাল কেয়ার": "🧴",
   "সিজনাল প্রোডাক্ট": "🎉",
   "অন্যান্য ক্যাটাগরি": "🛍️",
 };
@@ -360,43 +366,65 @@ export default function App() {
 
 function InfiniteCategoryStrip({ products, navigate }) {
   const list = [...CATEGORIES, ...CATEGORIES]; // duplicated for seamless loop
+  const trackRef = useRef(null);
+  const pausedRef = useRef(false);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const step = () => {
+      if (!pausedRef.current && el) {
+        el.scrollLeft += 0.6;
+        const half = el.scrollWidth / 2;
+        if (el.scrollLeft >= half) {
+          el.scrollLeft -= half;
+        }
+      }
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const pause = () => { pausedRef.current = true; };
+  const resume = () => { pausedRef.current = false; };
+
   return (
-    <div className="overflow-hidden py-4" style={{ background: PALETTE.card }}>
-      <style>{`
-        @keyframes catmarquee {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
-        }
-        .cat-marquee-track {
-          animation: catmarquee 28s linear infinite;
-        }
-      `}</style>
-      <div className="flex gap-4 cat-marquee-track" style={{ width: "max-content" }}>
-        {list.map((cat, i) => {
-          const count = products.filter((p) => p.cat === cat).length;
-          return (
-            <button
-              key={cat + i}
-              onClick={() => navigate(`#/category/${slugify(cat)}`)}
-              className="flex flex-col items-center gap-1.5 flex-shrink-0"
-              style={{ width: 76 }}
+    <div
+      ref={trackRef}
+      className="flex gap-4 py-4 overflow-x-auto"
+      style={{ background: PALETTE.card, scrollbarWidth: "none" }}
+      onTouchStart={pause}
+      onTouchEnd={resume}
+      onMouseDown={pause}
+      onMouseUp={resume}
+      onMouseLeave={resume}
+    >
+      {list.map((cat, i) => {
+        const count = products.filter((p) => p.cat === cat).length;
+        return (
+          <button
+            key={cat + i}
+            onClick={() => navigate(`#/category/${slugify(cat)}`)}
+            className="flex flex-col items-center gap-1.5 flex-shrink-0"
+            style={{ width: 76 }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
+              style={{ background: PALETTE.orangeSoft }}
             >
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
-                style={{ background: PALETTE.orangeSoft }}
-              >
-                {CATEGORY_ICONS[cat] || "🛍️"}
-              </div>
-              <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-                {cat}
-              </span>
-              <span className="text-[10px]" style={{ color: PALETTE.muted }}>
-                ({count})
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              {CATEGORY_ICONS[cat] || "🛍️"}
+            </div>
+            <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+              {cat}
+            </span>
+            <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+              ({count})
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -729,6 +757,8 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [uploading, setUploading] = useState(false);
+  const [colorImages, setColorImages] = useState({}); // { colorName: imageUrl }
+  const [uploadingColor, setUploadingColor] = useState(null);
 
   function emptyForm() {
     return { title: "", cat: CATEGORIES[0], price: "", discount: "", sizes: "", colors: "", desc: "", images: "" };
@@ -737,9 +767,49 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
   const startEdit = (p) => {
     setEditing(p.id);
     setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", ") });
+    // If images line up 1:1 with colors, restore the color→image pairing for editing.
+    if (p.images && p.colors && p.images.length === p.colors.length) {
+      const map = {};
+      p.colors.forEach((c, i) => { map[c] = p.images[i]; });
+      setColorImages(map);
+    } else {
+      setColorImages({});
+    }
   };
 
-  const resetForm = () => { setEditing(null); setForm(emptyForm()); };
+  const resetForm = () => { setEditing(null); setForm(emptyForm()); setColorImages({}); };
+
+  const uploadOneFile = async (file) => {
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const body = new FormData();
+    body.append("image", base64);
+    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+      method: "POST",
+      body,
+    });
+    const data = await res.json();
+    if (data && data.data && data.data.url) return data.data.url;
+    throw new Error("upload failed");
+  };
+
+  const handleColorFileUpload = async (color, file) => {
+    if (!file) return;
+    setUploadingColor(color);
+    try {
+      const url = await uploadOneFile(file);
+      setColorImages((m) => ({ ...m, [color]: url }));
+    } catch (e) {
+      alert("ছবি আপলোড করা যায়নি, আবার চেষ্টা করো।");
+    }
+    setUploadingColor(null);
+  };
+
+  const colorList = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -748,22 +818,8 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
     try {
       const uploadedUrls = [];
       for (const file of files) {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(",")[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const body = new FormData();
-        body.append("image", base64);
-        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-          method: "POST",
-          body,
-        });
-        const data = await res.json();
-        if (data && data.data && data.data.url) {
-          uploadedUrls.push(data.data.url);
-        }
+        const url = await uploadOneFile(file);
+        uploadedUrls.push(url);
       }
       setForm((f) => {
         const existing = f.images ? f.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -778,6 +834,10 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
 
   const submit = async () => {
     if (!form.title.trim() || !form.price) return;
+    const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"];
+    const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const allColorsHaveImages = colors.length > 1 && colors.every((c) => colorImages[c]);
+    const finalImages = allColorsHaveImages ? colors.map((c) => colorImages[c]) : generalImages;
     const payload = {
       id: editing || ("p" + Date.now()),
       title: form.title.trim(),
@@ -785,9 +845,9 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
       price: Number(form.price),
       discount: form.discount ? Number(form.discount) : 0,
       sizes: form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"],
-      colors: form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"],
+      colors,
       desc: form.desc.trim(),
-      images: form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      images: finalImages,
       seed: "prod" + (editing || Date.now()),
     };
     let next;
@@ -864,8 +924,37 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
               <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="সাইজ (কমা দিয়ে, যেমন: S, M, L)" value={form.sizes} onChange={(e) => setForm({ ...form, sizes: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="কালার (কমা দিয়ে)" value={form.colors} onChange={(e) => setForm({ ...form, colors: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+
+              {colorList.length > 1 && (
+                <div className="col-span-2 rounded-lg p-3" style={{ background: PALETTE.orangeSoft }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.ink }}>প্রতিটা রঙের জন্য আলাদা ছবি দাও (কাস্টমার রঙ সিলেক্ট করলে এই ছবিটাই দেখাবে)</p>
+                  <div className="space-y-2">
+                    {colorList.map((c) => (
+                      <div key={c} className="flex items-center gap-2 bg-white rounded-lg p-2">
+                        {colorImages[c] ? (
+                          <img src={colorImages[c]} alt={c} className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded flex-shrink-0" style={{ background: PALETTE.border }} />
+                        )}
+                        <span className="text-sm font-medium flex-shrink-0" style={{ width: 70 }}>{c}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleColorFileUpload(c, e.target.files[0])}
+                          disabled={uploadingColor === c}
+                          className="text-xs flex-1"
+                        />
+                        {uploadingColor === c && <span className="text-xs" style={{ color: PALETTE.orange }}>আপলোড হচ্ছে...</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="col-span-2">
-                <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>ফোন থেকে সরাসরি ছবি আপলোড করো (একাধিক বেছে নিতে পারো)</label>
+                <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>
+                  {colorList.length > 1 ? "সাধারণ ছবি (রঙ অনুযায়ী উপরে দিলে এটা লাগবে না)" : "ফোন থেকে সরাসরি ছবি আপলোড করো (একাধিক বেছে নিতে পারো)"}
+                </label>
                 <input
                   type="file"
                   accept="image/*"
