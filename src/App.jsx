@@ -137,6 +137,7 @@ export default function App() {
   const [hash, navigate] = useHashRoute();
   const [products, setProducts] = useState(SEED_PRODUCTS);
   const [orders, setOrders] = useState([]);
+  const [banners, setBanners] = useState([BANNER]);
   const [loaded, setLoaded] = useState(false);
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
   const [cartOpen, setCartOpen] = useState(false);
@@ -156,6 +157,13 @@ export default function App() {
         const ores = await window.storage.get("orders", true);
         if (ores && ores.value) setOrders(JSON.parse(ores.value));
       } catch (e) {}
+      try {
+        const bres = await window.storage.get("banners", true);
+        if (bres && bres.value) {
+          const parsed = JSON.parse(bres.value);
+          if (parsed && parsed.length > 0) setBanners(parsed);
+        }
+      } catch (e) {}
       setLoaded(true);
     })();
   }, []);
@@ -167,6 +175,10 @@ export default function App() {
   const saveOrders = async (next) => {
     setOrders(next);
     try { await window.storage.set("orders", JSON.stringify(next), true); } catch (e) {}
+  };
+  const saveBanners = async (next) => {
+    setBanners(next);
+    try { await window.storage.set("banners", JSON.stringify(next), true); } catch (e) {}
   };
 
   const showToast = (msg) => {
@@ -271,6 +283,7 @@ export default function App() {
       {view === "home" && (
         <HomeView
           products={products}
+          banners={banners}
           navigate={navigate}
           onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
           copyLink={copyLink}
@@ -301,7 +314,7 @@ export default function App() {
       {view === "done" && <DoneView navigate={navigate} orders={orders} />}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} saveProducts={saveProducts} saveOrders={saveOrders} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -429,22 +442,66 @@ function InfiniteCategoryStrip({ products, navigate }) {
   );
 }
 
-function HomeView({ products, navigate, onAdd, copyLink }) {
+function BannerCarousel({ banners }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    setIdx(0);
+  }, [banners]);
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const t = setInterval(() => {
+      setIdx((i) => (i + 1) % banners.length);
+    }, 4000);
+    return () => clearInterval(t);
+  }, [banners.length]);
+  return (
+    <section className="relative overflow-hidden" style={{ aspectRatio: "1280/533" }}>
+      <style>{`
+        @keyframes bannerzoom {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.08); }
+          100% { transform: scale(1); }
+        }
+        .banner-zoom-img {
+          animation: bannerzoom 8s ease-in-out infinite;
+        }
+        .banner-fade {
+          transition: opacity 0.8s ease-in-out;
+        }
+      `}</style>
+      {banners.map((src, i) => (
+        <img
+          key={i}
+          src={src}
+          alt="2LS Bazar Banner"
+          className="w-full h-full object-cover absolute inset-0 banner-fade banner-zoom-img"
+          style={{ opacity: i === idx ? 1 : 0 }}
+        />
+      ))}
+      {banners.length > 1 && (
+        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
+          {banners.map((_, i) => (
+            <span
+              key={i}
+              className="rounded-full"
+              style={{
+                width: i === idx ? 16 : 6,
+                height: 6,
+                background: i === idx ? PALETTE.orange : "rgba(255,255,255,0.7)",
+                transition: "width 0.3s",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HomeView({ products, banners, navigate, onAdd, copyLink }) {
   return (
     <>
-      <section className="overflow-hidden">
-        <style>{`
-          @keyframes bannerzoom {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.08); }
-            100% { transform: scale(1); }
-          }
-          .banner-zoom-img {
-            animation: bannerzoom 8s ease-in-out infinite;
-          }
-        `}</style>
-        <img src={BANNER} alt="2LS Bazar Banner" className="w-full object-cover banner-zoom-img" />
-      </section>
+      <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} />
 
       <InfiniteCategoryStrip products={products} navigate={navigate} />
 
@@ -758,7 +815,7 @@ function DoneView({ navigate, orders }) {
   );
 }
 
-function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyLink }) {
+function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBanners, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -769,6 +826,7 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
   const [uploading, setUploading] = useState(false);
   const [colorImages, setColorImages] = useState({}); // { colorName: imageUrl }
   const [uploadingColor, setUploadingColor] = useState(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   function emptyForm() {
     return { title: "", cat: CATEGORIES[0], price: "", discount: "", sizes: "", colors: "", desc: "", images: "" };
@@ -805,6 +863,29 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
     const data = await res.json();
     if (data && data.data && data.data.url) return data.data.url;
     throw new Error("upload failed");
+  };
+
+  const handleBannerUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploadingBanner(true);
+    try {
+      const urls = [];
+      for (const file of files) {
+        const url = await uploadOneFile(file);
+        urls.push(url);
+      }
+      await saveBanners([...banners, ...urls]);
+    } catch (err) {
+      alert("ব্যানার আপলোড করা যায়নি, আবার চেষ্টা করো।");
+    }
+    setUploadingBanner(false);
+    e.target.value = "";
+  };
+
+  const removeBanner = async (idx) => {
+    const next = banners.filter((_, i) => i !== idx);
+    await saveBanners(next);
   };
 
   const handleColorFileUpload = async (color, file) => {
@@ -919,6 +1000,7 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
         <button onClick={() => setTab("orders")} className="px-4 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1" style={tab === "orders" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>
           <ClipboardList size={14} /> অর্ডার ({orders.length})
         </button>
+        <button onClick={() => setTab("banners")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "banners" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ব্যানার</button>
       </div>
 
       {tab === "products" && (
@@ -1055,6 +1137,35 @@ function AdminView({ products, orders, saveProducts, saveOrders, navigate, copyL
               </div>
             );
           })}
+        </div>
+      )}
+
+      {tab === "banners" && (
+        <div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>নতুন ব্যানার ছবি আপলোড করো (একাধিক বেছে নিতে পারো)</label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleBannerUpload}
+              disabled={uploadingBanner}
+              className="w-full text-sm"
+            />
+            {uploadingBanner && <p className="text-xs mt-1" style={{ color: PALETTE.orange }}>আপলোড হচ্ছে...</p>}
+          </div>
+          <div className="space-y-3">
+            {banners.map((b, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+                <img src={b} alt={`banner-${i}`} className="w-24 h-12 object-cover rounded" />
+                <span className="text-xs flex-1" style={{ color: PALETTE.muted }}>ব্যানার #{i + 1}</span>
+                <button onClick={() => removeBanner(i)} className="p-2 rounded-full" style={{ background: "#FCE4E4" }} title="ডিলিট">
+                  <Trash2 size={14} color="#C0392B" />
+                </button>
+              </div>
+            ))}
+            {banners.length === 0 && <p className="text-sm" style={{ color: PALETTE.muted }}>কোনো ব্যানার নেই — উপরে থেকে আপলোড করো।</p>}
+          </div>
         </div>
       )}
     </div>
