@@ -432,9 +432,21 @@ function InfiniteCategoryStrip({ products, navigate }) {
 function HomeView({ products, navigate, onAdd, copyLink }) {
   return (
     <>
-      <section>
-        <img src={BANNER} alt="2LS Bazar Banner" className="w-full object-cover" />
+      <section className="overflow-hidden">
+        <style>{`
+          @keyframes bannerzoom {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+          }
+          .banner-zoom-img {
+            animation: bannerzoom 8s ease-in-out infinite;
+          }
+        `}</style>
+        <img src={BANNER} alt="2LS Bazar Banner" className="w-full object-cover banner-zoom-img" />
       </section>
+
+      <InfiniteCategoryStrip products={products} navigate={navigate} />
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {CATEGORIES.map((cat) => {
@@ -459,8 +471,6 @@ function HomeView({ products, navigate, onAdd, copyLink }) {
           );
         })}
       </div>
-
-      <InfiniteCategoryStrip products={products} navigate={navigate} />
     </>
   );
 }
