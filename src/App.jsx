@@ -53,6 +53,15 @@ const CATEGORY_ICONS = {
   "অন্যান্য ক্যাটাগরি": "🛍️",
 };
 
+// Default category list (name + emoji icon + optional image). Stored/edited via admin panel from here on.
+const DEFAULT_CATEGORIES = CATEGORIES.map((name) => ({
+  name,
+  icon: CATEGORY_ICONS[name] || "🛍️",
+  image: "",
+}));
+
+const WHATSAPP_NUMBER = "8801835528501";
+
 const SEED_PRODUCTS = [
   { id: "p1", title: "রেগুলার ফিট শার্ট", cat: "ছেলেদের পোশাক", price: 650, discount: 550, sizes: ["S", "M", "L", "XL"], colors: ["কালো", "নেভি"], seed: "shirt1", desc: "কটন ফেব্রিক, রেগুলার ফিট" },
   { id: "p2", title: "প্রিন্ট টি-শার্ট", cat: "ছেলেদের পোশাক", price: 450, discount: 380, sizes: ["M", "L", "XL"], colors: ["সাদা", "গ্রে"], seed: "shirt2", desc: "হাফ হাতা, সফট কটন" },
@@ -138,6 +147,7 @@ export default function App() {
   const [products, setProducts] = useState(SEED_PRODUCTS);
   const [orders, setOrders] = useState([]);
   const [banners, setBanners] = useState([BANNER]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [loaded, setLoaded] = useState(false);
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
   const [cartOpen, setCartOpen] = useState(false);
@@ -164,6 +174,15 @@ export default function App() {
           if (parsed && parsed.length > 0) setBanners(parsed);
         }
       } catch (e) {}
+      try {
+        const cres = await window.storage.get("categories", true);
+        if (cres && cres.value) {
+          const parsed = JSON.parse(cres.value);
+          if (parsed && parsed.length > 0) setCategories(parsed);
+        } else {
+          await window.storage.set("categories", JSON.stringify(DEFAULT_CATEGORIES), true);
+        }
+      } catch (e) {}
       setLoaded(true);
     })();
   }, []);
@@ -179,6 +198,10 @@ export default function App() {
   const saveBanners = async (next) => {
     setBanners(next);
     try { await window.storage.set("banners", JSON.stringify(next), true); } catch (e) {}
+  };
+  const saveCategories = async (next) => {
+    setCategories(next);
+    try { await window.storage.set("categories", JSON.stringify(next), true); } catch (e) {}
   };
 
   const showToast = (msg) => {
@@ -284,6 +307,7 @@ export default function App() {
         <HomeView
           products={products}
           banners={banners}
+          categories={categories}
           navigate={navigate}
           onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
           copyLink={copyLink}
@@ -314,7 +338,7 @@ export default function App() {
       {view === "done" && <DoneView navigate={navigate} orders={orders} />}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} categories={categories} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -373,12 +397,32 @@ export default function App() {
         </div>
         <p className="text-xs opacity-70">© ২০২৬ 2LS Bazar — ঢাকার ভেতরে ডেলিভারি ৳৯০, বাইরে ৳১৩০</p>
       </footer>
+
+      <a
+        href={`https://wa.me/${WHATSAPP_NUMBER}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-5 right-5 z-40 flex items-center justify-center rounded-full shadow-lg"
+        style={{ width: 56, height: 56, background: "#25D366" }}
+        title="WhatsApp-এ চ্যাট করুন"
+      >
+        <style>{`
+          @keyframes wapulse {
+            0% { box-shadow: 0 0 0 0 rgba(37,211,102,0.6); }
+            70% { box-shadow: 0 0 0 12px rgba(37,211,102,0); }
+            100% { box-shadow: 0 0 0 0 rgba(37,211,102,0); }
+          }
+          .wa-pulse { animation: wapulse 2.2s infinite; }
+        `}</style>
+        <span className="wa-pulse" style={{ position: "absolute", width: 56, height: 56, borderRadius: "50%" }} />
+        <MessageCircle size={28} color="#fff" fill="#fff" />
+      </a>
     </div>
   );
 }
 
-function InfiniteCategoryStrip({ products, navigate }) {
-  const list = [...CATEGORIES, ...CATEGORIES]; // duplicated for seamless loop
+function InfiniteCategoryStrip({ products, categories, navigate }) {
+  const list = [...categories, ...categories]; // duplicated for seamless loop
   const trackRef = useRef(null);
   const pausedRef = useRef(false);
   const rafRef = useRef(null);
@@ -415,22 +459,26 @@ function InfiniteCategoryStrip({ products, navigate }) {
       onMouseLeave={resume}
     >
       {list.map((cat, i) => {
-        const count = products.filter((p) => p.cat === cat).length;
+        const count = products.filter((p) => p.cat === cat.name).length;
         return (
           <button
-            key={cat + i}
-            onClick={() => navigate(`#/category/${slugify(cat)}`)}
+            key={cat.name + i}
+            onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
             className="flex flex-col items-center gap-1.5 flex-shrink-0"
             style={{ width: 76 }}
           >
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm"
+              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden"
               style={{ background: PALETTE.orangeSoft }}
             >
-              {CATEGORY_ICONS[cat] || "🛍️"}
+              {cat.image ? (
+                <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+              ) : (
+                cat.icon || "🛍️"
+              )}
             </div>
             <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-              {cat}
+              {cat.name}
             </span>
             <span className="text-[10px]" style={{ color: PALETTE.muted }}>
               ({count})
@@ -498,24 +546,24 @@ function BannerCarousel({ banners }) {
   );
 }
 
-function HomeView({ products, banners, navigate, onAdd, copyLink }) {
+function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) {
   return (
     <>
       <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} />
 
-      <InfiniteCategoryStrip products={products} navigate={navigate} />
+      <InfiniteCategoryStrip products={products} categories={categories} navigate={navigate} />
 
       <div className="max-w-5xl mx-auto px-4 py-6">
-        {CATEGORIES.map((cat) => {
-          const items = products.filter((p) => p.cat === cat);
+        {categories.map((cat) => {
+          const items = products.filter((p) => p.cat === cat.name);
           if (items.length === 0) return null;
           return (
-            <div key={cat} className="mb-9">
+            <div key={cat.name} className="mb-9">
               <div className="flex items-center justify-between mb-3">
                 <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-xl font-bold">
-                  {cat} <span className="text-sm font-normal" style={{ color: PALETTE.muted }}>({items.length})</span>
+                  {cat.name} <span className="text-sm font-normal" style={{ color: PALETTE.muted }}>({items.length})</span>
                 </h3>
-                <button onClick={() => copyLink(`#/category/${slugify(cat)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
+                <button onClick={() => copyLink(`#/category/${slugify(cat.name)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
                   <Share2 size={13} /> শেয়ার
                 </button>
               </div>
@@ -815,7 +863,7 @@ function DoneView({ navigate, orders }) {
   );
 }
 
-function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBanners, navigate, copyLink }) {
+function AdminView({ products, orders, banners, categories, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -827,9 +875,12 @@ function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBa
   const [colorImages, setColorImages] = useState({}); // { colorName: imageUrl }
   const [uploadingColor, setUploadingColor] = useState(null);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [catForm, setCatForm] = useState({ name: "", icon: "" });
+  const [catEditing, setCatEditing] = useState(null);
+  const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
   function emptyForm() {
-    return { title: "", cat: CATEGORIES[0], price: "", discount: "", sizes: "", colors: "", desc: "", images: "" };
+    return { title: "", cat: categories[0] ? categories[0].name : "", price: "", discount: "", sizes: "", colors: "", desc: "", images: "" };
   }
 
   const startEdit = (p) => {
@@ -886,6 +937,41 @@ function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBa
   const removeBanner = async (idx) => {
     const next = banners.filter((_, i) => i !== idx);
     await saveBanners(next);
+  };
+
+  const startCatEdit = (cat) => {
+    setCatEditing(cat.name);
+    setCatForm({ name: cat.name, icon: cat.icon || "" });
+  };
+
+  const resetCatForm = () => { setCatEditing(null); setCatForm({ name: "", icon: "" }); };
+
+  const submitCategory = async () => {
+    if (!catForm.name.trim()) return;
+    const existing = categories.find((c) => c.name === catEditing);
+    const payload = { name: catForm.name.trim(), icon: catForm.icon.trim() || "🛍️", image: existing ? existing.image : "" };
+    let next;
+    if (catEditing) next = categories.map((c) => (c.name === catEditing ? payload : c));
+    else next = [...categories, payload];
+    await saveCategories(next);
+    resetCatForm();
+  };
+
+  const removeCategory = async (name) => {
+    await saveCategories(categories.filter((c) => c.name !== name));
+  };
+
+  const handleCatImageUpload = async (name, file) => {
+    if (!file) return;
+    setUploadingCatImage(true);
+    try {
+      const url = await uploadOneFile(file);
+      const next = categories.map((c) => (c.name === name ? { ...c, image: url } : c));
+      await saveCategories(next);
+    } catch (e) {
+      alert("ছবি আপলোড করা যায়নি, আবার চেষ্টা করো।");
+    }
+    setUploadingCatImage(false);
   };
 
   const handleColorFileUpload = async (color, file) => {
@@ -1001,6 +1087,7 @@ function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBa
           <ClipboardList size={14} /> অর্ডার ({orders.length})
         </button>
         <button onClick={() => setTab("banners")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "banners" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ব্যানার</button>
+        <button onClick={() => setTab("categories")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "categories" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ক্যাটাগরি</button>
       </div>
 
       {tab === "products" && (
@@ -1010,7 +1097,7 @@ function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBa
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="প্রোডাক্ট টাইটেল" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="px-3 py-2 rounded-lg border col-span-2" style={{ borderColor: PALETTE.border }}>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
               </select>
               <input placeholder="দাম (৳)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
@@ -1165,6 +1252,44 @@ function AdminView({ products, orders, banners, saveProducts, saveOrders, saveBa
               </div>
             ))}
             {banners.length === 0 && <p className="text-sm" style={{ color: PALETTE.muted }}>কোনো ব্যানার নেই — উপরে থেকে আপলোড করো।</p>}
+          </div>
+        </div>
+      )}
+
+      {tab === "categories" && (
+        <div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <h3 className="font-semibold mb-3">{catEditing ? "ক্যাটাগরি এডিট করুন" : "নতুন ক্যাটাগরি যোগ করুন"}</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <input placeholder="ক্যাটাগরির নাম" value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              <input placeholder="ইমোজি আইকন (অপশনাল, যেমন: 👕)" value={catForm.icon} onChange={(e) => setCatForm({ ...catForm, icon: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button onClick={submitCategory} className="px-5 py-2 rounded-full font-semibold text-sm" style={{ background: PALETTE.orange, color: "#fff" }}>
+                {catEditing ? "আপডেট করুন" : "যোগ করুন"}
+              </button>
+              {catEditing && <button onClick={resetCatForm} className="px-5 py-2 rounded-full font-semibold text-sm border" style={{ borderColor: PALETTE.border }}>বাতিল</button>}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {categories.map((c) => (
+              <div key={c.name} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl overflow-hidden flex-shrink-0" style={{ background: PALETTE.orangeSoft }}>
+                  {c.image ? <img src={c.image} alt={c.name} className="w-full h-full object-cover" /> : (c.icon || "🛍️")}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">{c.name}</p>
+                  <label className="text-xs" style={{ color: PALETTE.blue }}>
+                    ছবি বসাও
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleCatImageUpload(c.name, e.target.files[0])} disabled={uploadingCatImage} />
+                  </label>
+                  {uploadingCatImage && <span className="text-xs ml-2" style={{ color: PALETTE.orange }}>আপলোড হচ্ছে...</span>}
+                </div>
+                <button onClick={() => startCatEdit(c)} className="p-2 rounded-full" style={{ background: "#E4EEF8" }} title="এডিট"><Pencil size={14} color={PALETTE.blue} /></button>
+                <button onClick={() => removeCategory(c.name)} className="p-2 rounded-full" style={{ background: "#FCE4E4" }} title="ডিলিট"><Trash2 size={14} color="#C0392B" /></button>
+              </div>
+            ))}
           </div>
         </div>
       )}
