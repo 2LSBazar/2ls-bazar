@@ -608,26 +608,58 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
 
 function ImageCarousel({ images, title, forcedIndex }) {
   const [idx, setIdx] = useState(0);
+  const touchStartX = useRef(null);
+  const touchDeltaX = useRef(0);
+
   useEffect(() => {
     setIdx(0);
   }, [images]);
+
   useEffect(() => {
     if (forcedIndex !== null && forcedIndex !== undefined) {
       setIdx(forcedIndex);
     }
   }, [forcedIndex]);
+
   useEffect(() => {
     if (images.length <= 1) return;
-    if (forcedIndex !== null && forcedIndex !== undefined) return; // color-linked, no auto-slide
+    if (forcedIndex !== null && forcedIndex !== undefined) return;
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % images.length);
     }, 3000);
     return () => clearInterval(t);
   }, [images.length, forcedIndex]);
+
+  const next = () => setIdx((i) => (i + 1) % images.length);
+  const prev = () => setIdx((i) => (i - 1 + images.length) % images.length);
+
+  const onTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchDeltaX.current = 0;
+  };
+  const onTouchMove = (e) => {
+    if (touchStartX.current === null) return;
+    touchDeltaX.current = e.touches[0].clientX - touchStartX.current;
+  };
+  const onTouchEnd = () => {
+    if (Math.abs(touchDeltaX.current) > 40) {
+      if (touchDeltaX.current < 0) next();
+      else prev();
+    }
+    touchStartX.current = null;
+    touchDeltaX.current = 0;
+  };
+
   return (
     <div className="mb-4">
-      <div className="rounded-2xl overflow-hidden relative" style={{ background: PALETTE.card }}>
-        <img src={images[idx]} alt={title} className="w-full aspect-[4/5] object-cover" />
+      <div
+        className="rounded-2xl overflow-hidden relative"
+        style={{ background: PALETTE.card, touchAction: "pan-y" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <img src={images[idx]} alt={title} className="w-full aspect-[4/5] object-cover select-none" draggable={false} />
       </div>
       {images.length > 1 && (
         <div className="flex justify-center gap-1.5 mt-2">
@@ -683,22 +715,6 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
         {hasDiscount && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={p.price} /></span>}
       </div>
 
-      <div className="flex gap-2 mt-4">
-        <button onClick={() => onAdd(p, size, color)} className="flex-1 py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
-          কার্টে দিন
-        </button>
-        <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
-          <Share2 size={18} color={PALETTE.blue} />
-        </button>
-      </div>
-
-      {p.desc && (
-        <div className="mt-6">
-          <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-base font-bold mb-1">প্রোডাক্ট বিবরণ</h3>
-          <p className="text-sm" style={{ color: PALETTE.muted }}>{p.desc}</p>
-        </div>
-      )}
-
       <div className="mt-5">
         <p className="text-sm font-semibold mb-1">সাইজ</p>
         <div className="flex gap-2 flex-wrap">
@@ -719,6 +735,22 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
           ))}
         </div>
       </div>
+
+      <div className="flex gap-2 mt-5">
+        <button onClick={() => onAdd(p, size, color)} className="flex-1 py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
+          কার্টে দিন
+        </button>
+        <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
+          <Share2 size={18} color={PALETTE.blue} />
+        </button>
+      </div>
+
+      {p.desc && (
+        <div className="mt-7">
+          <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-base font-bold mb-1">প্রোডাক্ট বিবরণ</h3>
+          <p className="text-sm" style={{ color: PALETTE.muted }}>{p.desc}</p>
+        </div>
+      )}
 
       {relatedProducts.length > 0 && (
         <div className="mt-9">
