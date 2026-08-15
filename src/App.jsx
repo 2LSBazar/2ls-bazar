@@ -62,6 +62,7 @@ const DEFAULT_CATEGORIES = CATEGORIES.map((name) => ({
   name,
   icon: CATEGORY_ICONS[name] || "🛍️",
   image: "",
+  color: "#F5821F",
 }));
 
 const WHATSAPP_NUMBER = "8801835528501";
@@ -136,13 +137,26 @@ function Taka({ amount }) {
   return <span>৳{amount.toLocaleString("en-IN")}</span>;
 }
 
-// Computes the final price for a specific size/color combination, applying
-// any per-size or per-color price adjustments (+/-) set in the admin panel.
+// Computes the final price for a specific size/color combination.
+// If a size has its own explicit sell/special price set in the admin panel
+// (p.sizePricing[size]), that is used as the base instead of the product's
+// default price. Any per-color adjustment (+/-) is then added on top.
 function getVariantPrice(p, size, color) {
-  const base = p.discount && p.discount > 0 && p.discount < p.price ? p.discount : p.price;
-  const sizeAdj = (p.sizeAdjust && p.sizeAdjust[size]) || 0;
+  let base = p.discount && p.discount > 0 && p.discount < p.price ? p.discount : p.price;
+  const sp = p.sizePricing && p.sizePricing[size];
+  if (sp && (sp.price || sp.discount)) {
+    base = sp.discount && sp.discount > 0 && sp.discount < sp.price ? sp.discount : sp.price;
+  }
   const colorAdj = (p.colorAdjust && p.colorAdjust[color]) || 0;
-  return Math.max(0, base + sizeAdj + colorAdj);
+  return Math.max(0, base + colorAdj);
+}
+
+// Returns the "original" (pre-discount) price to show struck-through, for a
+// given size selection — the size's own sell price if set, else the product's.
+function getVariantOriginalPrice(p, size) {
+  const sp = p.sizePricing && p.sizePricing[size];
+  if (sp && sp.price) return sp.price;
+  return p.price;
 }
 
 function useHashRoute() {
@@ -375,7 +389,7 @@ export default function App() {
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} navigate={navigate} onAdd={addToCart} copyLink={copyLink} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} copyLink={copyLink} />
       )}
 
       {view === "checkout" && (
@@ -525,7 +539,7 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
           >
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden"
-              style={{ background: PALETTE.orangeSoft }}
+              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft }}
             >
               {cat.image ? (
                 <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
@@ -615,14 +629,32 @@ function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) 
           if (items.length === 0) return null;
           return (
             <div key={cat.name} className="mb-9">
-              <div className="flex items-center justify-between mb-3">
-                <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-xl font-bold">
-                  {cat.name} <span className="text-sm font-normal" style={{ color: PALETTE.muted }}>({items.length})</span>
-                </h3>
-                <button onClick={() => copyLink(`#/category/${slugify(cat.name)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
-                  <Share2 size={13} /> শেয়ার
+              {cat.image ? (
+                <button
+                  onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
+                  className="w-full block mb-3 rounded-2xl overflow-hidden relative"
+                  style={{ height: 128 }}
+                >
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                  <div
+                    className="absolute inset-0 flex items-end p-3"
+                    style={{ background: "linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.6))" }}
+                  >
+                    <span style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-white font-bold text-lg text-left">
+                      {cat.name} <span className="text-sm font-normal opacity-90">({items.length})</span>
+                    </span>
+                  </div>
                 </button>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between mb-3">
+                  <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: cat.color || PALETTE.navy }} className="text-xl font-bold">
+                    {cat.name} <span className="text-sm font-normal" style={{ color: PALETTE.muted }}>({items.length})</span>
+                  </h3>
+                  <button onClick={() => copyLink(`#/category/${slugify(cat.name)}`)} className="text-xs flex items-center gap-1" style={{ color: PALETTE.blue }}>
+                    <Share2 size={13} /> শেয়ার
+                  </button>
+                </div>
+              )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {items.map((p) => (
                   <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} />
@@ -737,7 +769,7 @@ function ImageCarousel({ images, title, forcedIndex }) {
   );
 }
 
-function ProductView({ productId, products, navigate, onAdd, copyLink }) {
+function ProductView({ productId, products, categories, navigate, onAdd, copyLink }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(p?.sizes[0]);
   const [color, setColor] = useState(p?.colors[0]);
@@ -755,8 +787,11 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
   const forcedIndex = colorLinked ? p.colors.indexOf(color) : null;
   const relatedProducts = products.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
-  const basePrice = p.discount && p.discount > 0 && p.discount < p.price ? p.discount : p.price;
+  const originalPrice = getVariantOriginalPrice(p, size) + ((p.colorAdjust && p.colorAdjust[color]) || 0);
+  const isDiscounted = originalPrice > displayPrice;
   const youtubeId = getYoutubeId(p.videoUrl);
+  const catInfo = categories && categories.find((c) => c.name === p.cat);
+  const catColor = (catInfo && catInfo.color) || PALETTE.orange;
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
@@ -766,11 +801,11 @@ function ProductView({ productId, products, navigate, onAdd, copyLink }) {
 
       <ImageCarousel images={images} title={p.title} forcedIndex={forcedIndex} />
 
-      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }}>{p.cat}</span>
+      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${catColor}22`, color: catColor }}>{p.cat}</span>
       <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
       <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={displayPrice} /></span>
-        {p.discount > 0 && p.discount < p.price && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={p.price + ((p.sizeAdjust && p.sizeAdjust[size]) || 0) + ((p.colorAdjust && p.colorAdjust[color]) || 0)} /></span>}
+        {isDiscounted && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={originalPrice} /></span>}
       </div>
 
       <div className="mt-5">
@@ -980,11 +1015,11 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   const [form, setForm] = useState(emptyForm());
   const [uploading, setUploading] = useState(false);
   const [colorImages, setColorImages] = useState({}); // { colorName: imageUrl }
-  const [sizeAdjustForm, setSizeAdjustForm] = useState({}); // { sizeName: "string number" }
+  const [sizePriceForm, setSizePriceForm] = useState({}); // { sizeName: { price: "string", discount: "string" } }
   const [colorAdjustForm, setColorAdjustForm] = useState({}); // { colorName: "string number" }
   const [uploadingColor, setUploadingColor] = useState(null);
   const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [catForm, setCatForm] = useState({ name: "", icon: "" });
+  const [catForm, setCatForm] = useState({ name: "", icon: "", color: "#F5821F" });
   const [catEditing, setCatEditing] = useState(null);
   const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
@@ -1003,11 +1038,20 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
     } else {
       setColorImages({});
     }
-    setSizeAdjustForm(p.sizeAdjust ? Object.fromEntries(Object.entries(p.sizeAdjust).map(([k, v]) => [k, String(v)])) : {});
+    setSizePriceForm(
+      p.sizePricing
+        ? Object.fromEntries(
+            Object.entries(p.sizePricing).map(([k, v]) => [
+              k,
+              { price: v.price ? String(v.price) : "", discount: v.discount ? String(v.discount) : "" },
+            ])
+          )
+        : {}
+    );
     setColorAdjustForm(p.colorAdjust ? Object.fromEntries(Object.entries(p.colorAdjust).map(([k, v]) => [k, String(v)])) : {});
   };
 
-  const resetForm = () => { setEditing(null); setForm(emptyForm()); setColorImages({}); setSizeAdjustForm({}); setColorAdjustForm({}); };
+  const resetForm = () => { setEditing(null); setForm(emptyForm()); setColorImages({}); setSizePriceForm({}); setColorAdjustForm({}); };
 
   const uploadOneFile = async (file) => {
     const body = new FormData();
@@ -1047,15 +1091,15 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
 
   const startCatEdit = (cat) => {
     setCatEditing(cat.name);
-    setCatForm({ name: cat.name, icon: cat.icon || "" });
+    setCatForm({ name: cat.name, icon: cat.icon || "", color: cat.color || "#F5821F" });
   };
 
-  const resetCatForm = () => { setCatEditing(null); setCatForm({ name: "", icon: "" }); };
+  const resetCatForm = () => { setCatEditing(null); setCatForm({ name: "", icon: "", color: "#F5821F" }); };
 
   const submitCategory = async () => {
     if (!catForm.name.trim()) return;
     const existing = categories.find((c) => c.name === catEditing);
-    const payload = { name: catForm.name.trim(), icon: catForm.icon.trim() || "🛍️", image: existing ? existing.image : "" };
+    const payload = { name: catForm.name.trim(), icon: catForm.icon.trim() || "🛍️", color: catForm.color || "#F5821F", image: existing ? existing.image : "" };
     let next;
     if (catEditing) next = categories.map((c) => (c.name === catEditing ? payload : c));
     else next = [...categories, payload];
@@ -1078,6 +1122,11 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
       alert("ছবি আপলোড করা যায়নি, আবার চেষ্টা করো।");
     }
     setUploadingCatImage(false);
+  };
+
+  const removeCatImage = async (name) => {
+    const next = categories.map((c) => (c.name === name ? { ...c, image: "" } : c));
+    await saveCategories(next);
   };
 
   const handleColorFileUpload = async (color, file) => {
@@ -1123,10 +1172,17 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
     const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const allColorsHaveImages = colors.length > 1 && colors.every((c) => colorImages[c]);
     const finalImages = allColorsHaveImages ? colors.map((c) => colorImages[c]) : generalImages;
-    const sizeAdjust = {};
+    const sizePricing = {};
     sizes.forEach((s) => {
-      const v = Number(sizeAdjustForm[s]);
-      if (sizeAdjustForm[s] && !isNaN(v)) sizeAdjust[s] = v;
+      const entry = sizePriceForm[s];
+      if (entry && (entry.price || entry.discount)) {
+        const priceNum = Number(entry.price);
+        const discountNum = Number(entry.discount);
+        sizePricing[s] = {
+          price: entry.price && !isNaN(priceNum) ? priceNum : Number(form.price),
+          discount: entry.discount && !isNaN(discountNum) ? discountNum : 0,
+        };
+      }
     });
     const colorAdjust = {};
     colors.forEach((c) => {
@@ -1144,7 +1200,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
       desc: form.desc.trim(),
       images: finalImages,
       videoUrl: form.videoUrl.trim(),
-      sizeAdjust,
+      sizePricing,
       colorAdjust,
       seed: "prod" + (editing || Date.now()),
     };
@@ -1227,18 +1283,26 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
 
               {sizeList.length > 1 && (
                 <div className="col-span-2 rounded-lg p-3" style={{ background: "#E4EEF8" }}>
-                  <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.ink }}>সাইজ অনুযায়ী দাম কম/বেশি (৳, না দিলে ০ ধরা হবে — মাইনাস দিতে চাইলে যেমন: -50)</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.ink }}>সাইজ অনুযায়ী নিজের দাম বসাও (খালি রাখলে উপরের সাধারণ দাম/ডিসকাউন্ট প্রাইসই ব্যবহার হবে)</p>
+                  <div className="space-y-2">
                     {sizeList.map((s) => (
-                      <div key={s} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1">
-                        <span className="text-sm flex-shrink-0" style={{ width: 60 }}>{s}</span>
+                      <div key={s} className="flex items-center gap-2 bg-white rounded-lg px-2 py-1.5">
+                        <span className="text-sm flex-shrink-0" style={{ width: 55 }}>{s}</span>
                         <input
                           type="number"
-                          placeholder="0"
-                          value={sizeAdjustForm[s] || ""}
-                          onChange={(e) => setSizeAdjustForm((m) => ({ ...m, [s]: e.target.value }))}
+                          placeholder="সেল প্রাইস"
+                          value={(sizePriceForm[s] && sizePriceForm[s].price) || ""}
+                          onChange={(e) => setSizePriceForm((m) => ({ ...m, [s]: { ...(m[s] || {}), price: e.target.value } }))}
                           className="flex-1 px-2 py-1 rounded border text-sm"
-                          style={{ borderColor: PALETTE.border }}
+                          style={{ borderColor: PALETTE.border, minWidth: 0 }}
+                        />
+                        <input
+                          type="number"
+                          placeholder="স্পেশাল প্রাইস"
+                          value={(sizePriceForm[s] && sizePriceForm[s].discount) || ""}
+                          onChange={(e) => setSizePriceForm((m) => ({ ...m, [s]: { ...(m[s] || {}), discount: e.target.value } }))}
+                          className="flex-1 px-2 py-1 rounded border text-sm"
+                          style={{ borderColor: PALETTE.border, minWidth: 0 }}
                         />
                       </div>
                     ))}
@@ -1427,6 +1491,10 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="ক্যাটাগরির নাম" value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="ইমোজি আইকন (অপশনাল, যেমন: 👕)" value={catForm.icon} onChange={(e) => setCatForm({ ...catForm, icon: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              <div className="col-span-2 flex items-center gap-2">
+                <label className="text-xs font-medium" style={{ color: PALETTE.muted }}>ক্যাটাগরির রঙ</label>
+                <input type="color" value={catForm.color} onChange={(e) => setCatForm({ ...catForm, color: e.target.value })} className="w-10 h-8 rounded border" style={{ borderColor: PALETTE.border }} />
+              </div>
             </div>
             <div className="flex gap-2 mt-3">
               <button onClick={submitCategory} className="px-5 py-2 rounded-full font-semibold text-sm" style={{ background: PALETTE.orange, color: "#fff" }}>
@@ -1443,11 +1511,19 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                   {c.image ? <img src={c.image} alt={c.name} className="w-full h-full object-cover" /> : (c.icon || "🛍️")}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{c.name}</p>
+                  <p className="text-sm font-semibold truncate flex items-center gap-2">
+                    <span className="inline-block rounded-full flex-shrink-0" style={{ width: 10, height: 10, background: c.color || PALETTE.orange }} />
+                    {c.name}
+                  </p>
                   <label className="text-xs" style={{ color: PALETTE.blue }}>
-                    ছবি বসাও
+                    ব্যানার ছবি বসাও (হোমপেজে ক্লিকযোগ্য ব্যানার হবে)
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => handleCatImageUpload(c.name, e.target.files[0])} disabled={uploadingCatImage} />
                   </label>
+                  {c.image && (
+                    <button onClick={() => removeCatImage(c.name)} className="text-xs ml-2" style={{ color: "#C0392B" }}>
+                      ব্যানার সরাও
+                    </button>
+                  )}
                   {uploadingCatImage && <span className="text-xs ml-2" style={{ color: PALETTE.orange }}>আপলোড হচ্ছে...</span>}
                 </div>
                 <button onClick={() => startCatEdit(c)} className="p-2 rounded-full" style={{ background: "#E4EEF8" }} title="এডিট"><Pencil size={14} color={PALETTE.blue} /></button>
