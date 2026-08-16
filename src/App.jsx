@@ -175,10 +175,16 @@ function useHashRoute() {
 function ProductCard({ p, onOpen, onAdd }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
   const imgSrc = p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/400/500`;
+  const outOfStock = p.inStock === false;
   return (
-    <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: PALETTE.card }}>
-      <div className="aspect-[4/5] overflow-hidden cursor-pointer" onClick={() => onOpen(p)}>
-        <img src={imgSrc} alt={p.title} className="w-full h-full object-cover" />
+    <div className="rounded-2xl overflow-hidden shadow-sm relative" style={{ background: PALETTE.card }}>
+      <div className="aspect-[4/5] overflow-hidden cursor-pointer relative" onClick={() => onOpen(p)}>
+        <img src={imgSrc} alt={p.title} className="w-full h-full object-cover" style={outOfStock ? { filter: "grayscale(60%)", opacity: 0.7 } : undefined} />
+        {outOfStock && (
+          <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#C0392B", color: "#fff" }}>
+            স্টক নেই
+          </span>
+        )}
       </div>
       <div className="p-3">
         <h3 className="font-semibold text-[14px] leading-snug cursor-pointer" onClick={() => onOpen(p)}>{p.title}</h3>
@@ -193,11 +199,12 @@ function ProductCard({ p, onOpen, onAdd }) {
           )}
         </div>
         <button
-          onClick={() => onAdd(p)}
+          onClick={() => !outOfStock && onAdd(p)}
+          disabled={outOfStock}
           className="mt-2 w-full text-xs font-semibold px-3 py-1.5 rounded-full"
-          style={{ background: PALETTE.blue, color: "#fff" }}
+          style={outOfStock ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.blue, color: "#fff" }}
         >
-          কার্টে দিন
+          {outOfStock ? "স্টক নেই" : "কার্টে দিন"}
         </button>
       </div>
     </div>
@@ -280,6 +287,10 @@ export default function App() {
   };
 
   const addToCart = (p, size, color) => {
+    if (p.inStock === false) {
+      showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
+      return;
+    }
     const key = `${p.id}|${size || p.sizes[0]}|${color || p.colors[0]}`;
     setCart((c) => ({
       ...c,
@@ -830,8 +841,13 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       </div>
 
       <div className="flex gap-2 mt-5">
-        <button onClick={() => onAdd(p, size, color)} className="flex-1 py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
-          কার্টে দিন
+        <button
+          onClick={() => p.inStock !== false && onAdd(p, size, color)}
+          disabled={p.inStock === false}
+          className="flex-1 py-3 rounded-full font-semibold"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.orange, color: "#fff" }}
+        >
+          {p.inStock === false ? "স্টক নেই" : "কার্টে দিন"}
         </button>
         <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
           <Share2 size={18} color={PALETTE.blue} />
@@ -1024,12 +1040,12 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
   function emptyForm() {
-    return { title: "", cat: categories[0] ? categories[0].name : "", price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "" };
+    return { title: "", cat: categories[0] ? categories[0].name : "", price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
   }
 
   const startEdit = (p) => {
     setEditing(p.id);
-    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "" });
+    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
     // If images line up 1:1 with colors, restore the color→image pairing for editing.
     if (p.images && p.colors && p.images.length === p.colors.length) {
       const map = {};
@@ -1200,6 +1216,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
       desc: form.desc.trim(),
       images: finalImages,
       videoUrl: form.videoUrl.trim(),
+      inStock: form.inStock !== false,
       sizePricing,
       colorAdjust,
       seed: "prod" + (editing || Date.now()),
@@ -1374,6 +1391,20 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
               <textarea placeholder="অথবা ছবির লিংক এখানে (একাধিক হলে কমা (,) দিয়ে আলাদা করো)" value={form.images} onChange={(e) => setForm({ ...form, images: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" rows={2} style={{ borderColor: PALETTE.border }} />
               <textarea placeholder="বিবরণ" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" rows={2} style={{ borderColor: PALETTE.border }} />
               <input placeholder="YouTube ভিডিও লিংক (অপশনাল)" value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+
+              <div className="col-span-2 flex items-center justify-between rounded-lg p-3" style={{ background: form.inStock ? "#E4F5E9" : "#FCE4E4" }}>
+                <span className="text-sm font-semibold" style={{ color: form.inStock ? "#1E8E5A" : "#C0392B" }}>
+                  {form.inStock ? "স্টকে আছে (কাস্টমার অর্ডার করতে পারবে)" : "স্টক নেই (প্রোডাক্ট দেখা যাবে, অর্ডার করা যাবে না)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, inStock: !form.inStock })}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold flex-shrink-0"
+                  style={{ background: form.inStock ? "#1E8E5A" : "#C0392B", color: "#fff" }}
+                >
+                  {form.inStock ? "স্টক আউট করো" : "স্টক ইন করো"}
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 mt-3">
               <button onClick={submit} className="px-5 py-2 rounded-full font-semibold text-sm" style={{ background: PALETTE.orange, color: "#fff" }}>
@@ -1384,18 +1415,27 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
           </div>
 
           <div className="space-y-2">
-            {products.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-                <img src={p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{p.title}</p>
-                  <p className="text-xs" style={{ color: PALETTE.muted }}>{p.cat} • <Taka amount={p.discount || p.price} /></p>
+            {products.map((p) => {
+              const outOfStock = p.inStock === false;
+              const toggleStock = async () => {
+                await saveProducts(products.map((x) => (x.id === p.id ? { ...x, inStock: !x.inStock } : x)));
+              };
+              return (
+                <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+                  <img src={p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{p.title}</p>
+                    <p className="text-xs" style={{ color: PALETTE.muted }}>{p.cat} • <Taka amount={p.discount || p.price} /></p>
+                  </div>
+                  <button onClick={toggleStock} className="text-[10px] font-semibold px-2 py-1.5 rounded-full flex-shrink-0" style={{ background: outOfStock ? "#FCE4E4" : "#E4F5E9", color: outOfStock ? "#C0392B" : "#1E8E5A" }}>
+                    {outOfStock ? "স্টক নেই" : "স্টকে আছে"}
+                  </button>
+                  <button onClick={() => copyLink(`#/product/${p.id}`)} className="p-2 rounded-full" style={{ background: PALETTE.orangeSoft }} title="লিংক কপি"><Copy size={14} color={PALETTE.orange} /></button>
+                  <button onClick={() => startEdit(p)} className="p-2 rounded-full" style={{ background: "#E4EEF8" }} title="এডিট"><Pencil size={14} color={PALETTE.blue} /></button>
+                  <button onClick={() => remove(p.id)} className="p-2 rounded-full" style={{ background: "#FCE4E4" }} title="ডিলিট"><Trash2 size={14} color="#C0392B" /></button>
                 </div>
-                <button onClick={() => copyLink(`#/product/${p.id}`)} className="p-2 rounded-full" style={{ background: PALETTE.orangeSoft }} title="লিংক কপি"><Copy size={14} color={PALETTE.orange} /></button>
-                <button onClick={() => startEdit(p)} className="p-2 rounded-full" style={{ background: "#E4EEF8" }} title="এডিট"><Pencil size={14} color={PALETTE.blue} /></button>
-                <button onClick={() => remove(p.id)} className="p-2 rounded-full" style={{ background: "#FCE4E4" }} title="ডিলিট"><Trash2 size={14} color="#C0392B" /></button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
