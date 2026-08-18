@@ -174,12 +174,16 @@ function getVariantOriginalPrice(p, size) {
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/");
   useEffect(() => {
-    const onChange = () => setHash(window.location.hash || "#/");
+    const onChange = () => {
+      setHash(window.location.hash || "#/");
+      window.scrollTo(0, 0);
+    };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
   const navigate = useCallback((h) => {
     window.location.hash = h;
+    window.scrollTo(0, 0);
   }, []);
   return [hash, navigate];
 }
