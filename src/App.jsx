@@ -602,33 +602,36 @@ export default function App() {
 
 function InfiniteCategoryStrip({ products, categories, navigate }) {
   const list = [...categories, ...categories]; // duplicated for seamless loop
-  const trackRef = useRef(null);
+  const itemRefs = useRef([]);
   const pausedRef = useRef(false);
-  const rafRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const step = () => {
-      if (!pausedRef.current && el) {
-        el.scrollLeft += 0.6;
-        const half = el.scrollWidth / 2;
-        if (el.scrollLeft >= half) {
-          el.scrollLeft -= half;
-        }
-      }
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
+    if (categories.length === 0) return;
+    const timer = setInterval(() => {
+      if (pausedRef.current) return;
+      setActiveIndex((i) => {
+        const next = i + 1;
+        // once we've scrolled through the duplicated half, jump back to
+        // the start instantly so the loop looks endless
+        return next >= categories.length * 2 ? 0 : next;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [categories.length]);
+
+  useEffect(() => {
+    const el = itemRefs.current[activeIndex];
+    if (el) {
+      el.scrollIntoView({ behavior: activeIndex === 0 ? "auto" : "smooth", inline: "center", block: "nearest" });
+    }
+  }, [activeIndex]);
 
   const pause = () => { pausedRef.current = true; };
   const resume = () => { pausedRef.current = false; };
 
   return (
     <div
-      ref={trackRef}
       className="flex gap-4 py-4 overflow-x-auto"
       style={{ background: PALETTE.card, scrollbarWidth: "none" }}
       onTouchStart={pause}
@@ -639,16 +642,21 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
     >
       {list.map((cat, i) => {
         const count = products.filter((p) => productCats(p).includes(cat.name)).length;
+        const isActive = i === activeIndex;
         return (
           <button
             key={cat.name + i}
+            ref={(el) => (itemRefs.current[i] = el)}
             onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
             className="flex flex-col items-center gap-1.5 flex-shrink-0"
             style={{ width: 76 }}
           >
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden"
-              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft }}
+              className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden transition-all"
+              style={{
+                background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft,
+                border: isActive ? "2px solid #E53935" : "2px solid transparent",
+              }}
             >
               {cat.image ? (
                 <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
