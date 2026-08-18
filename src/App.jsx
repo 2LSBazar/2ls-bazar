@@ -186,6 +186,7 @@ function useHashRoute() {
 
 function ProductCard({ p, onOpen, onAdd }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
+  const discountPct = hasDiscount ? Math.round(((p.price - p.discount) / p.price) * 100) : 0;
   const firstColorImg = p.colorImages && Object.values(p.colorImages)[0];
   const imgSrc = (p.images && p.images.length > 0) ? p.images[0] : (firstColorImg || `https://picsum.photos/seed/${p.seed || p.id}/400/500`);
   const outOfStock = p.inStock === false;
@@ -196,6 +197,11 @@ function ProductCard({ p, onOpen, onAdd }) {
         {outOfStock && (
           <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#C0392B", color: "#fff" }}>
             স্টক নেই
+          </span>
+        )}
+        {!outOfStock && hasDiscount && (
+          <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: PALETTE.orange, color: "#fff" }}>
+            {discountPct}% ছাড়
           </span>
         )}
       </div>
@@ -993,6 +999,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
   const displayPrice = getVariantPrice(p, size, color);
   const originalPrice = getVariantOriginalPrice(p, size) + ((p.colorAdjust && p.colorAdjust[color]) || 0);
   const isDiscounted = originalPrice > displayPrice;
+  const discountPct = isDiscounted ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100) : 0;
   const youtubeId = getYoutubeId(p.videoUrl);
   const catInfo = categories && categories.find((c) => c.name === pCats[0]);
   const catColor = (catInfo && catInfo.color) || PALETTE.orange;
@@ -1018,6 +1025,11 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={displayPrice} /></span>
         {isDiscounted && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={originalPrice} /></span>}
+        {isDiscounted && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${PALETTE.orange}22`, color: PALETTE.orange }}>
+            {discountPct}% ছাড়
+          </span>
+        )}
       </div>
 
       <div className="mt-5">
@@ -1058,7 +1070,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       {p.desc && (
         <div className="mt-7">
           <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-base font-bold mb-1">প্রোডাক্ট বিবরণ</h3>
-          <p className="text-sm" style={{ color: PALETTE.muted }}>{p.desc}</p>
+          <p className="text-sm whitespace-pre-line" style={{ color: PALETTE.muted }}>{p.desc}</p>
         </div>
       )}
 
@@ -1660,7 +1672,14 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                 )}
               </div>
               <input placeholder="দাম (৳)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              <div>
+                <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+                {form.price && form.discount && Number(form.discount) > 0 && Number(form.discount) < Number(form.price) && (
+                  <p className="text-xs mt-1 font-semibold" style={{ color: PALETTE.orange }}>
+                    {Math.round(((Number(form.price) - Number(form.discount)) / Number(form.price)) * 100)}% ছাড় দেখাবে
+                  </p>
+                )}
+              </div>
               <input placeholder="সাইজ (কমা দিয়ে, যেমন: S, M, L)" value={form.sizes} onChange={(e) => setForm({ ...form, sizes: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="কালার (কমা দিয়ে)" value={form.colors} onChange={(e) => setForm({ ...form, colors: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
 
