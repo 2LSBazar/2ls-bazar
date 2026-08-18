@@ -177,7 +177,8 @@ function useHashRoute() {
 
 function ProductCard({ p, onOpen, onAdd }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
-  const imgSrc = p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/400/500`;
+  const firstColorImg = p.colorImages && Object.values(p.colorImages)[0];
+  const imgSrc = (p.images && p.images.length > 0) ? p.images[0] : (firstColorImg || `https://picsum.photos/seed/${p.seed || p.id}/400/500`);
   const outOfStock = p.inStock === false;
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm relative" style={{ background: PALETTE.card }}>
@@ -959,10 +960,12 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       </div>
     );
   }
-  const images = p.images && p.images.length > 0 ? p.images : [`https://picsum.photos/seed/${p.seed || p.id}/500/600`];
-  // If the number of images matches the number of colors, link color selection to a specific image (no auto-slide).
-  const colorLinked = p.colors && p.colors.length > 1 && images.length === p.colors.length;
-  const forcedIndex = colorLinked ? p.colors.indexOf(color) : null;
+  const generalImages = p.images && p.images.length > 0 ? p.images : (!p.colorImages || Object.keys(p.colorImages).length === 0 ? [`https://picsum.photos/seed/${p.seed || p.id}/500/600`] : []);
+  const colorImg = p.colorImages && p.colorImages[color];
+  // Show the selected color's photo first (if one was uploaded for it),
+  // followed by the general gallery photos — so nothing uploaded gets hidden.
+  const images = colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages;
+  const forcedIndex = colorImg ? 0 : null;
   const relatedProducts = products.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
   const originalPrice = getVariantOriginalPrice(p, size) + ((p.colorAdjust && p.colorAdjust[color]) || 0);
@@ -1340,8 +1343,13 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   const startEdit = (p) => {
     setEditing(p.id);
     setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
-    // If images line up 1:1 with colors, restore the color→image pairing for editing.
-    if (p.images && p.colors && p.images.length === p.colors.length) {
+    // Restore color→image pairing for editing. New products store this in
+    // p.colorImages directly. Old products (saved before this fix) may have
+    // had their general images silently replaced by 1:1 color images — for
+    // those, recover the pairing positionally so nothing is lost.
+    if (p.colorImages && Object.keys(p.colorImages).length > 0) {
+      setColorImages(p.colorImages);
+    } else if (p.images && p.colors && p.images.length === p.colors.length && p.colors.length > 1) {
       const map = {};
       p.colors.forEach((c, i) => { map[c] = p.images[i]; });
       setColorImages(map);
@@ -1480,8 +1488,9 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
     const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"];
     const sizes = form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"];
     const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
-    const allColorsHaveImages = colors.length > 1 && colors.every((c) => colorImages[c]);
-    const finalImages = allColorsHaveImages ? colors.map((c) => colorImages[c]) : generalImages;
+    // Color-specific images and general/gallery images are kept separate now,
+    // instead of colorImages silently replacing generalImages when every
+    // color had one assigned. Both show up in the product's photo carousel.
     const sizePricing = {};
     sizes.forEach((s) => {
       const entry = sizePriceForm[s];
@@ -1508,7 +1517,8 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
       sizes,
       colors,
       desc: form.desc.trim(),
-      images: finalImages,
+      images: generalImages,
+      colorImages: Object.fromEntries(colors.filter((c) => colorImages[c]).map((c) => [c, colorImages[c]])),
       videoUrl: form.videoUrl.trim(),
       inStock: form.inStock !== false,
       sizePricing,
