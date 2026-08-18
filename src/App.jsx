@@ -1177,51 +1177,6 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         </div>
       )}
 
-      {tab === "promo" && (
-        <div className="space-y-5">
-          <div className="rounded-2xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-            <h3 className="font-semibold mb-4">প্রোমো পপ-আপ সেটিংস</h3>
-            
-            <div className="mb-4 flex items-center gap-2">
-              <input type="checkbox" checked={promoPopup.enabled} onChange={(e) => setPromoPopup({ ...promoPopup, enabled: e.target.checked })} id="promo-enable" />
-              <label htmlFor="promo-enable" className="text-sm font-medium">পপ-আপ অন করো</label>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>ব্যানার ছবি</label>
-                <label className="px-4 py-2 rounded-lg border border-dashed flex items-center justify-center gap-2 cursor-pointer" style={{ borderColor: PALETTE.border }}>
-                  <span className="text-sm">ক্লিক করে ছবি আপলোড করো</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                    if (e.target.files[0]) {
-                      const reader = new FileReader();
-                      reader.onload = (evt) => setPromoPopup({ ...promoPopup, image: evt.target.result });
-                      reader.readAsDataURL(e.target.files[0]);
-                    }
-                  }} />
-                </label>
-                {promoPopup.image && <img src={promoPopup.image} alt="Promo" className="w-full mt-2 rounded-lg" style={{ maxHeight: 150 }} />}
-              </div>
-
-              <div>
-                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>ক্যাটাগরি (বাটনে ক্লিক করলে এই ক্যাটাগরিতে যাবে)</label>
-                <select value={promoPopup.category} onChange={(e) => setPromoPopup({ ...promoPopup, category: e.target.value })} className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }}>
-                  {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>পপ-আপ টেক্সট</label>
-                <input type="text" value={promoPopup.text} onChange={(e) => setPromoPopup({ ...promoPopup, text: e.target.value })} placeholder="নতুন কালেকশন এসেছে! এখনই দেখো →" className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              </div>
-
-              <button onClick={() => {}} className="w-full py-2 px-4 rounded-full font-semibold text-white" style={{ background: PALETTE.blue }}>
-                সংরক্ষণ করুন
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -1769,7 +1724,6 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
         </button>
         <button onClick={() => setTab("banners")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "banners" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ব্যানার</button>
         <button onClick={() => setTab("categories")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "categories" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ক্যাটাগরি</button>
-        <button onClick={() => setTab("promo")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "promo" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>প্রোমো পপ-আপ</button>
       </div>
 
       {tab === "products" && (
