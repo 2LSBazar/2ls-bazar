@@ -625,7 +625,7 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
         setInstantJump(false);
         return next;
       });
-    }, 1000);
+    }, 3000);
     return () => clearInterval(timer);
   }, [categories.length]);
 
