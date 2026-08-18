@@ -208,6 +208,11 @@ function ProductCard({ p, onOpen, onAdd }) {
             {discountPct}% ছাড়
           </span>
         )}
+        {!outOfStock && p.codEnabled === false && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#E2136E", color: "#fff" }}>
+            শুধু বিকাশ পেমেন্ট
+          </span>
+        )}
       </div>
       <div className="p-3">
         <h3 className="font-semibold text-[14px] leading-snug cursor-pointer" onClick={() => onOpen(p)}>{p.title}</h3>
@@ -1140,6 +1145,11 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
           <Share2 size={18} color={PALETTE.blue} />
         </button>
       </div>
+      {p.codEnabled === false && (
+        <p className="text-xs mt-2 font-medium" style={{ color: "#E2136E" }}>
+          এই প্রোডাক্টে ক্যাশ অন ডেলিভারি নেই — শুধু বিকাশে পেমেন্ট করে অর্ডার করা যাবে।
+        </p>
+      )}
 
       {p.desc && (
         <div className="mt-7">
@@ -1187,12 +1197,24 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
   const deliveryCharge = form.area === "dhaka" ? 90 : 130;
   const total = subtotal + deliveryCharge;
 
+  // If any item in the cart has COD turned off by the admin, cash-on-delivery
+  // isn't allowed for this order — the whole order has to go through bKash.
+  const codBlockedItems = cartItems.filter((i) => i.product.codEnabled === false);
+  const codAllowed = codBlockedItems.length === 0;
+
+  useEffect(() => {
+    if (!codAllowed && form.paymentMethod === "cod") {
+      setForm((f) => ({ ...f, paymentMethod: "bkash" }));
+    }
+  }, [codAllowed]);
+
   const submit = async () => {
     const errs = {};
     if (!form.name.trim()) errs.name = "নাম লিখুন";
     if (!/^0\d{9,10}$/.test(form.phone.trim())) errs.phone = "সঠিক ফোন নম্বর দিন";
     if (!form.address.trim()) errs.address = "ঠিকানা লিখুন";
     if (form.paymentMethod === "bkash" && !form.trxId.trim()) errs.trxId = "পেমেন্টের পর পাওয়া ট্রানজেকশন আইডি লিখুন";
+    if (form.paymentMethod === "cod" && !codAllowed) errs.paymentMethod = "এই প্রোডাক্টের জন্য ক্যাশ অন ডেলিভারি নেই, বিকাশে পেমেন্ট করো";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     const orderId = "2LS" + Math.floor(100000 + Math.random() * 900000);
@@ -1265,13 +1287,29 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
         <div>
           <label className="text-sm font-medium">পেমেন্ট মাধ্যম</label>
           <div className="flex gap-2 mt-1">
-            <button onClick={() => setForm({ ...form, paymentMethod: "cod" })} className="flex-1 py-2 rounded-lg border text-sm font-medium" style={form.paymentMethod === "cod" ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
+            <button
+              onClick={() => codAllowed && setForm({ ...form, paymentMethod: "cod" })}
+              disabled={!codAllowed}
+              className="flex-1 py-2 rounded-lg border text-sm font-medium"
+              style={
+                !codAllowed
+                  ? { background: "#EDEDED", color: "#A0A0A0", borderColor: PALETTE.border, cursor: "not-allowed" }
+                  : form.paymentMethod === "cod"
+                  ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue }
+                  : { borderColor: PALETTE.border }
+              }
+            >
               ক্যাশ অন ডেলিভারি
             </button>
             <button onClick={() => setForm({ ...form, paymentMethod: "bkash" })} className="flex-1 py-2 rounded-lg border text-sm font-medium" style={form.paymentMethod === "bkash" ? { background: "#E2136E", color: "#fff", borderColor: "#E2136E" } : { borderColor: PALETTE.border }}>
               বিকাশে পেমেন্ট
             </button>
           </div>
+          {!codAllowed && (
+            <p className="text-xs mt-1.5" style={{ color: PALETTE.orange }}>
+              তোমার কার্টে থাকা {codBlockedItems.map((i) => `"${i.product.title}"`).join(", ")} প্রোডাক্টের জন্য ক্যাশ অন ডেলিভারি নেই — শুধু বিকাশে পেমেন্ট করে অর্ডার করা যাবে।
+            </p>
+          )}
         </div>
 
         {form.paymentMethod === "bkash" && (
@@ -1455,7 +1493,7 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
   const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
   function emptyForm() {
-    return { title: "", cats: categories[0] ? [categories[0].name] : [], price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
+    return { title: "", cats: categories[0] ? [categories[0].name] : [], price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true, codEnabled: true };
   }
 
   const toggleFormCat = (name) => {
@@ -1468,7 +1506,7 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
 
   const startEdit = (p) => {
     setEditing(p.id);
-    setForm({ title: p.title, cats: productCats(p), price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
+    setForm({ title: p.title, cats: productCats(p), price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false, codEnabled: p.codEnabled !== false });
     // Restore color→image pairing for editing. New products store this in
     // p.colorImages directly. Old products (saved before this fix) may have
     // had their general images silently replaced by 1:1 color images — for
@@ -1657,6 +1695,7 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
       colorImages: Object.fromEntries(colors.filter((c) => colorImages[c]).map((c) => [c, colorImages[c]])),
       videoUrl: form.videoUrl.trim(),
       inStock: form.inStock !== false,
+      codEnabled: form.codEnabled !== false,
       sizePricing,
       colorAdjust,
       seed: "prod" + (editing || Date.now()),
@@ -1872,6 +1911,20 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
                   style={{ background: form.inStock ? "#1E8E5A" : "#C0392B", color: "#fff" }}
                 >
                   {form.inStock ? "স্টক আউট করো" : "স্টক ইন করো"}
+                </button>
+              </div>
+
+              <div className="col-span-2 flex items-center justify-between rounded-lg p-3" style={{ background: form.codEnabled !== false ? "#E4F5E9" : "#FCE4E4" }}>
+                <span className="text-sm font-semibold" style={{ color: form.codEnabled !== false ? "#1E8E5A" : "#C0392B" }}>
+                  {form.codEnabled !== false ? "ক্যাশ অন ডেলিভারি চালু আছে" : "শুধু বিকাশে পেমেন্ট (COD বন্ধ)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, codEnabled: !(form.codEnabled !== false) })}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold flex-shrink-0"
+                  style={{ background: form.codEnabled !== false ? "#1E8E5A" : "#C0392B", color: "#fff" }}
+                >
+                  {form.codEnabled !== false ? "COD বন্ধ করো" : "COD চালু করো"}
                 </button>
               </div>
             </div>
