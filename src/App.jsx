@@ -609,8 +609,10 @@ export default function App() {
 function InfiniteCategoryStrip({ products, categories, navigate }) {
   const [items, setItems] = useState(categories);
   const pausedRef = useRef(false);
-  const [sliding, setSliding] = useState(false); // false = resting, true = mid-slide
+  const [phase, setPhase] = useState(0); // 0 = resting, 1 = sliding forward, -1 = sliding backward
   const [instantJump, setInstantJump] = useState(false);
+  const dragStartX = useRef(null);
+  const draggingRef = useRef(false);
 
   const CARD_WIDTH = 76;
   const GAP = 16; // matches gap-4
@@ -619,42 +621,74 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
   // keep in sync if the admin adds/removes categories
   useEffect(() => { setItems(categories); }, [categories]);
 
+  const stepForward = () => {
+    if (items.length < 2) return;
+    setInstantJump(false);
+    setPhase(1);
+  };
+  const stepBackward = () => {
+    if (items.length < 2) return;
+    setInstantJump(false);
+    setPhase(-1);
+  };
+
   useEffect(() => {
     if (items.length === 0) return;
     const timer = setInterval(() => {
       if (pausedRef.current) return;
-      setInstantJump(false);
-      setSliding(true);
+      stepForward();
     }, 3000);
     return () => clearInterval(timer);
   }, [items.length]);
 
   useEffect(() => {
-    if (!sliding) return;
+    if (phase === 0) return;
     // after the slide animation finishes, actually move the item that just
-    // scrolled off to the back of the line and snap position back with no
+    // scrolled off into its new position in the line and snap back with no
     // transition — so there's never a visible "end of the list" moment
     const t = setTimeout(() => {
       setInstantJump(true);
-      setItems((prev) => (prev.length > 1 ? [...prev.slice(1), prev[0]] : prev));
-      setSliding(false);
-    }, 500);
+      setItems((prev) => {
+        if (prev.length < 2) return prev;
+        return phase === 1 ? [...prev.slice(1), prev[0]] : [prev[prev.length - 1], ...prev.slice(0, -1)];
+      });
+      setPhase(0);
+    }, 400);
     return () => clearTimeout(t);
-  }, [sliding]);
+  }, [phase]);
 
   const pause = () => { pausedRef.current = true; };
   const resume = () => { pausedRef.current = false; };
 
-  // render the real list plus one clone of the first item, so sliding by
-  // one step always reveals something that looks like the next real card
-  const list = items.length > 0 ? [...items, items[0]] : items;
+  const onTouchStart = (e) => {
+    pause();
+    draggingRef.current = true;
+    dragStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e) => {
+    if (draggingRef.current && dragStartX.current !== null) {
+      const delta = e.changedTouches[0].clientX - dragStartX.current;
+      if (delta < -30) stepForward();
+      else if (delta > 30) stepBackward();
+    }
+    draggingRef.current = false;
+    dragStartX.current = null;
+    resume();
+  };
+
+  // render one clone of the last item before the real list, and one clone
+  // of the first item after it — swiping either direction always reveals
+  // something that looks like a real neighboring card
+  const extended = items.length > 0 ? [items[items.length - 1], ...items, items[0]] : items;
+  const restingIndex = 1;
+  const targetIndex = restingIndex + phase;
 
   return (
     <div
       className="py-4 overflow-hidden"
       style={{ background: PALETTE.card }}
-      onTouchStart={pause}
-      onTouchEnd={resume}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onMouseDown={pause}
       onMouseUp={resume}
       onMouseLeave={resume}
@@ -662,13 +696,13 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
       <div
         className="flex gap-4"
         style={{
-          transform: `translateX(-${sliding ? STEP : 0}px)`,
-          transition: instantJump ? "none" : "transform 0.5s ease",
+          transform: `translateX(-${targetIndex * STEP}px)`,
+          transition: instantJump ? "none" : "transform 0.4s ease",
         }}
       >
-        {list.map((cat, i) => {
+        {extended.map((cat, i) => {
           const count = products.filter((p) => productCats(p).includes(cat.name)).length;
-          const isActive = i === 0;
+          const isActive = i === restingIndex;
           return (
             <button
               key={cat.name + i}
