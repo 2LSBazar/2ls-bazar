@@ -601,36 +601,47 @@ export default function App() {
 }
 
 function InfiniteCategoryStrip({ products, categories, navigate }) {
-  const list = [...categories, ...categories]; // duplicated for seamless loop
+  const [items, setItems] = useState(categories);
   const pausedRef = useRef(false);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [sliding, setSliding] = useState(false); // false = resting, true = mid-slide
   const [instantJump, setInstantJump] = useState(false);
 
   const CARD_WIDTH = 76;
   const GAP = 16; // matches gap-4
   const STEP = CARD_WIDTH + GAP;
 
+  // keep in sync if the admin adds/removes categories
+  useEffect(() => { setItems(categories); }, [categories]);
+
   useEffect(() => {
-    if (categories.length === 0) return;
+    if (items.length === 0) return;
     const timer = setInterval(() => {
       if (pausedRef.current) return;
-      setActiveIndex((i) => {
-        const next = i + 1;
-        if (next >= categories.length * 2) {
-          // reached the duplicated half — snap back to start with no
-          // transition so the loop feels endless instead of jumping
-          setInstantJump(true);
-          return 0;
-        }
-        setInstantJump(false);
-        return next;
-      });
+      setInstantJump(false);
+      setSliding(true);
     }, 3000);
     return () => clearInterval(timer);
-  }, [categories.length]);
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!sliding) return;
+    // after the slide animation finishes, actually move the item that just
+    // scrolled off to the back of the line and snap position back with no
+    // transition — so there's never a visible "end of the list" moment
+    const t = setTimeout(() => {
+      setInstantJump(true);
+      setItems((prev) => (prev.length > 1 ? [...prev.slice(1), prev[0]] : prev));
+      setSliding(false);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [sliding]);
 
   const pause = () => { pausedRef.current = true; };
   const resume = () => { pausedRef.current = false; };
+
+  // render the real list plus one clone of the first item, so sliding by
+  // one step always reveals something that looks like the next real card
+  const list = items.length > 0 ? [...items, items[0]] : items;
 
   return (
     <div
@@ -645,13 +656,13 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
       <div
         className="flex gap-4"
         style={{
-          transform: `translateX(-${activeIndex * STEP}px)`,
+          transform: `translateX(-${sliding ? STEP : 0}px)`,
           transition: instantJump ? "none" : "transform 0.5s ease",
         }}
       >
         {list.map((cat, i) => {
           const count = products.filter((p) => productCats(p).includes(cat.name)).length;
-          const isActive = i === activeIndex;
+          const isActive = i === 0;
           return (
             <button
               key={cat.name + i}
