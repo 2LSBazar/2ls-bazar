@@ -271,7 +271,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [banners, setBanners] = useState([BANNER]);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [promoPopup, setPromoPopup] = useState({ enabled: true, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
+  const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
@@ -488,13 +488,6 @@ export default function App() {
 
       {view === "home" && (
         <>
-          {promoPopup.enabled && !promoPopupDismissed && (
-            <PromoPopup
-              promo={promoPopup}
-              navigate={navigate}
-              onDismiss={() => setPromoPopupDismissed(true)}
-            />
-          )}
           <HomeView
             products={products}
             banners={banners}
