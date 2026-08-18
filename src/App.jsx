@@ -214,6 +214,29 @@ function ProductCard({ p, onOpen, onAdd }) {
   );
 }
 
+// Products are stored across multiple keys ("products_0", "products_1", ...)
+// instead of one single key, because each storage key has a size ceiling.
+// This groups products into chunks that each stay safely under that ceiling,
+// so the shop can keep adding products without hitting a hard wall.
+const PRODUCT_CHUNK_MAX_BYTES = 3_800_000;
+function splitProductsIntoChunks(products) {
+  const chunks = [];
+  let current = [];
+  let currentSize = 2;
+  for (const p of products) {
+    const size = JSON.stringify(p).length + 1;
+    if (currentSize + size > PRODUCT_CHUNK_MAX_BYTES && current.length > 0) {
+      chunks.push(current);
+      current = [];
+      currentSize = 2;
+    }
+    current.push(p);
+    currentSize += size;
+  }
+  chunks.push(current); // always at least one chunk, even if empty
+  return chunks;
+}
+
 export default function App() {
   useEffect(() => {
     const link = document.createElement("link");
@@ -232,14 +255,43 @@ export default function App() {
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const productChunkCountRef = useRef(1);
 
   // load from shared storage
   useEffect(() => {
     (async () => {
       try {
-        const res = await window.storage.get("products", true);
-        if (res && res.value) setProducts(JSON.parse(res.value));
-        else await window.storage.set("products", JSON.stringify(SEED_PRODUCTS), true);
+        const metaRes = await window.storage.get("products_meta", true);
+        if (metaRes && metaRes.value) {
+          // New chunked format
+          const meta = JSON.parse(metaRes.value);
+          const count = meta.count || 1;
+          let all = [];
+          for (let i = 0; i < count; i++) {
+            const cres = await window.storage.get(`products_${i}`, true);
+            if (cres && cres.value) all = all.concat(JSON.parse(cres.value));
+          }
+          setProducts(all);
+          productChunkCountRef.current = count;
+        } else {
+          // Old single-key format (or first run) — read it, then migrate.
+          const res = await window.storage.get("products", true);
+          if (res && res.value) {
+            const old = JSON.parse(res.value);
+            setProducts(old);
+            const chunks = splitProductsIntoChunks(old);
+            for (let i = 0; i < chunks.length; i++) {
+              await window.storage.set(`products_${i}`, JSON.stringify(chunks[i]), true);
+            }
+            await window.storage.set("products_meta", JSON.stringify({ count: chunks.length }), true);
+            productChunkCountRef.current = chunks.length;
+          } else {
+            setProducts(SEED_PRODUCTS);
+            await window.storage.set("products_0", JSON.stringify(SEED_PRODUCTS), true);
+            await window.storage.set("products_meta", JSON.stringify({ count: 1 }), true);
+            productChunkCountRef.current = 1;
+          }
+        }
       } catch (e) {
         // IMPORTANT: if reading storage fails (network hiccup, temporary error,
         // etc.) we must NOT overwrite the real saved products with the seed
@@ -273,16 +325,21 @@ export default function App() {
   }, []);
 
   const saveProducts = async (next) => {
-    const json = JSON.stringify(next);
-    // Warn before hitting the hard storage limit instead of failing silently.
-    if (json.length > 4_500_000) {
-      alert("প্রোডাক্ট লিস্ট সাইজ লিমিটের কাছাকাছি চলে গেছে (৪.৫MB+)। নতুন প্রোডাক্ট যোগ করার আগে কিছু পুরনো/অপ্রয়োজনীয় প্রোডাক্ট মুছে ফেলুন, নাহলে সেভ ব্যর্থ হতে পারে।");
-    }
     setProducts(next);
+    const chunks = splitProductsIntoChunks(next);
+    const oldCount = productChunkCountRef.current;
     try {
-      await window.storage.set("products", json, true);
+      for (let i = 0; i < chunks.length; i++) {
+        await window.storage.set(`products_${i}`, JSON.stringify(chunks[i]), true);
+      }
+      await window.storage.set("products_meta", JSON.stringify({ count: chunks.length }), true);
+      // Clean up any leftover chunk keys from before, if the list shrank.
+      for (let i = chunks.length; i < oldCount; i++) {
+        try { await window.storage.delete(`products_${i}`, true); } catch (_e) {}
+      }
+      productChunkCountRef.current = chunks.length;
     } catch (e) {
-      alert("প্রোডাক্ট সেভ করা যায়নি! স্টোরেজ লিমিট শেষ হয়ে থাকতে পারে। পেজ রিফ্রেশ করে আবার চেষ্টা করুন, প্রয়োজনে কিছু প্রোডাক্ট মুছে জায়গা খালি করুন।");
+      alert("প্রোডাক্ট সেভ করা যায়নি! নেটওয়ার্ক সমস্যা হতে পারে। পেজ রিফ্রেশ করে আবার চেষ্টা করুন।");
     }
   };
   const saveOrders = async (next) => {
@@ -350,17 +407,19 @@ export default function App() {
   };
 
   // ---- routing ----
-  const path = hash.replace(/^#\/?/, "");
-  const parts = path.split("/").filter(Boolean);
+  const [pathOnly, queryStr] = hash.replace(/^#\/?/, "").split("?");
+  const parts = pathOnly.split("/").filter(Boolean);
+  const queryId = queryStr ? new URLSearchParams(queryStr).get("id") : null;
 
   let view = "home";
   let param = null;
   if (parts[0] === "category" && parts[1]) { view = "category"; param = decodeURIComponent(parts[1]); }
   else if (parts[0] === "product" && parts[1]) { view = "product"; param = parts[1]; }
   else if (parts[0] === "checkout") view = "checkout";
-  else if (parts[0] === "order-done") view = "done";
+  else if (parts[0] === "order-done") { view = "done"; param = queryId; }
   else if (parts[0] === "admin") view = "admin";
   else if (parts[0] === "search") view = "search";
+  else if (parts[0] === "track") { view = "track"; param = parts[1] ? decodeURIComponent(parts[1]) : queryId; }
 
   if (!loaded) {
     return <div style={{ background: PALETTE.bg, minHeight: "100vh" }} />;
@@ -381,6 +440,9 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => navigate("#/track")} className="p-2 rounded-full" style={{ background: "#E4EEF8", color: PALETTE.blue }} title="অর্ডার ট্র্যাক করুন">
+              <ClipboardList size={18} />
+            </button>
             <button onClick={() => navigate("#/search")} className="p-2 rounded-full" style={{ background: "#E4EEF8", color: PALETTE.blue }} title="সার্চ">
               <Search size={18} />
             </button>
@@ -434,10 +496,14 @@ export default function App() {
         />
       )}
 
-      {view === "done" && <DoneView navigate={navigate} orders={orders} />}
+      {view === "done" && <DoneView navigate={navigate} orders={orders} orderId={param} />}
 
       {view === "search" && (
         <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])} />
+      )}
+
+      {view === "track" && (
+        <TrackOrderView navigate={navigate} orders={orders} initialId={param} />
       )}
 
       {view === "admin" && (
@@ -1136,8 +1202,8 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
   );
 }
 
-function DoneView({ navigate, orders }) {
-  const order = orders[0];
+function DoneView({ navigate, orders, orderId }) {
+  const order = (orderId && orders.find((o) => o.id === orderId)) || orders[0];
   return (
     <section className="max-w-md mx-auto px-4 py-20 text-center">
       <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: PALETTE.orange }}>
@@ -1148,16 +1214,103 @@ function DoneView({ navigate, orders }) {
         <>
           <p className="text-sm mb-1" style={{ color: PALETTE.muted }}>আপনার অর্ডার আইডি</p>
           <p className="font-bold text-lg mb-6" style={{ color: PALETTE.blue }}>{order.id}</p>
-          <p className="text-sm mb-8" style={{ color: PALETTE.muted }}>
+          <p className="text-sm mb-6" style={{ color: PALETTE.muted }}>
             {order.paymentMethod === "bkash"
               ? "আমরা আপনার বিকাশ পেমেন্ট যাচাই করে শীঘ্রই ফোন করে নিশ্চিত করবো।"
               : `আমরা শীঘ্রই ${order.phone} নম্বরে ফোন করে নিশ্চিত করবো।`}
           </p>
+          <button onClick={() => navigate(`#/track/${order.id}`)} className="px-6 py-2.5 rounded-full font-semibold mb-3 block mx-auto" style={{ background: PALETTE.blue, color: "#fff" }}>
+            অর্ডার ট্র্যাক করুন
+          </button>
         </>
       )}
       <button onClick={() => navigate("#/")} className="px-6 py-2.5 rounded-full font-semibold" style={{ background: PALETTE.blue, color: "#fff" }}>
         আরও কেনাকাটা করুন
       </button>
+    </section>
+  );
+}
+
+function TrackOrderView({ navigate, orders, initialId }) {
+  const [query, setQuery] = useState(initialId || "");
+  const [searched, setSearched] = useState(!!initialId);
+
+  const statusOptions = ["পেন্ডিং", "কনফার্ম হয়েছে", "ডেলিভারি হচ্ছে", "ডেলিভার হয়েছে", "বাতিল"];
+  const statusColor = {
+    "পেন্ডিং": PALETTE.orange,
+    "কনফার্ম হয়েছে": PALETTE.blue,
+    "ডেলিভারি হচ্ছে": PALETTE.navy,
+    "ডেলিভার হয়েছে": "#1E8E5A",
+    "বাতিল": "#C0392B",
+  };
+  const statusStep = { "পেন্ডিং": 0, "কনফার্ম হয়েছে": 1, "ডেলিভারি হচ্ছে": 2, "ডেলিভার হয়েছে": 3, "বাতিল": -1 };
+
+  const found = searched ? orders.find((o) => o.id.trim().toLowerCase() === query.trim().toLowerCase()) : null;
+  const status = found ? (found.status || "পেন্ডিং") : null;
+  const step = status ? statusStep[status] : 0;
+
+  return (
+    <section className="max-w-md mx-auto px-4 py-10">
+      <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mb-4 text-center">অর্ডার ট্র্যাক করুন</h2>
+      <div className="flex gap-2 mb-6">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && setSearched(true)}
+          placeholder="অর্ডার আইডি দিন (যেমন: 2LS123456)"
+          className="flex-1 px-3 py-2 rounded-lg border bg-white"
+          style={{ borderColor: PALETTE.border }}
+        />
+        <button onClick={() => setSearched(true)} className="px-4 rounded-lg font-semibold text-sm" style={{ background: PALETTE.blue, color: "#fff" }}>
+          খুঁজুন
+        </button>
+      </div>
+
+      {searched && !found && (
+        <p className="text-sm text-center" style={{ color: PALETTE.muted }}>এই আইডি দিয়ে কোনো অর্ডার পাওয়া যায়নি। আইডিটি আবার চেক করুন।</p>
+      )}
+
+      {found && (
+        <div className="rounded-2xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+          <div className="flex justify-between items-start mb-1">
+            <p className="font-bold text-sm" style={{ color: PALETTE.blue }}>{found.id}</p>
+            <p className="text-xs" style={{ color: PALETTE.muted }}>{new Date(found.time).toLocaleString("bn-BD")}</p>
+          </div>
+          <p className="text-sm mb-3">{found.name}</p>
+
+          <div className="mb-4">
+            <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: statusColor[status] + "22", color: statusColor[status] }}>
+              {status}
+            </span>
+          </div>
+
+          {status !== "বাতিল" && (
+            <div className="flex items-center mb-4">
+              {statusOptions.slice(0, 4).map((s, i) => (
+                <React.Fragment key={s}>
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: i <= step ? PALETTE.blue : PALETTE.border }} />
+                  {i < 3 && <div className="flex-1 h-0.5" style={{ background: i < step ? PALETTE.blue : PALETTE.border }} />}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 text-xs">
+            {found.items.map((it, idx) => (
+              <div key={idx} className="flex justify-between">
+                <span>{it.title} ({it.size}/{it.color}) × {it.qty}</span>
+                <span><Taka amount={it.price * it.qty} /></span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between font-bold text-sm mt-2 pt-2 border-t" style={{ borderColor: PALETTE.border }}>
+            <span>সর্বমোট</span>
+            <span style={{ color: PALETTE.orange }}><Taka amount={found.total} /></span>
+          </div>
+        </div>
+      )}
+
+      <button onClick={() => navigate("#/")} className="mt-6 text-sm font-medium block mx-auto" style={{ color: PALETTE.blue }}>← শপে ফিরে যান</button>
     </section>
   );
 }
