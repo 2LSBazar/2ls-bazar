@@ -92,6 +92,15 @@ function slugify(text) {
   return encodeURIComponent(text);
 }
 
+// Returns a product's category list. New products store an array in `cats`
+// (so one product can appear in several categories). Older products only
+// have a single `cat` string — fall back to that so nothing breaks.
+function productCats(p) {
+  if (p.cats && p.cats.length > 0) return p.cats;
+  if (p.cat) return [p.cat];
+  return [];
+}
+
 function getYoutubeId(url) {
   if (!url) return null;
   const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
@@ -165,18 +174,23 @@ function getVariantOriginalPrice(p, size) {
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash || "#/");
   useEffect(() => {
-    const onChange = () => setHash(window.location.hash || "#/");
+    const onChange = () => {
+      setHash(window.location.hash || "#/");
+      window.scrollTo(0, 0);
+    };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
   const navigate = useCallback((h) => {
     window.location.hash = h;
+    window.scrollTo(0, 0);
   }, []);
   return [hash, navigate];
 }
 
 function ProductCard({ p, onOpen, onAdd }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
+  const discountPct = hasDiscount ? Math.round(((p.price - p.discount) / p.price) * 100) : 0;
   const firstColorImg = p.colorImages && Object.values(p.colorImages)[0];
   const imgSrc = (p.images && p.images.length > 0) ? p.images[0] : (firstColorImg || `https://picsum.photos/seed/${p.seed || p.id}/400/500`);
   const outOfStock = p.inStock === false;
@@ -187,6 +201,11 @@ function ProductCard({ p, onOpen, onAdd }) {
         {outOfStock && (
           <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#C0392B", color: "#fff" }}>
             স্টক নেই
+          </span>
+        )}
+        {!outOfStock && hasDiscount && (
+          <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: PALETTE.orange, color: "#fff" }}>
+            {discountPct}% ছাড়
           </span>
         )}
       </div>
@@ -252,6 +271,8 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [banners, setBanners] = useState([BANNER]);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [promoPopup, setPromoPopup] = useState({ enabled: true, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
+  const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
   const [cartOpen, setCartOpen] = useState(false);
@@ -466,14 +487,23 @@ export default function App() {
       )}
 
       {view === "home" && (
-        <HomeView
-          products={products}
-          banners={banners}
-          categories={categories}
-          navigate={navigate}
-          onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
-          copyLink={copyLink}
-        />
+        <>
+          {promoPopup.enabled && !promoPopupDismissed && (
+            <PromoPopup
+              promo={promoPopup}
+              navigate={navigate}
+              onDismiss={() => setPromoPopupDismissed(true)}
+            />
+          )}
+          <HomeView
+            products={products}
+            banners={banners}
+            categories={categories}
+            navigate={navigate}
+            onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
+            copyLink={copyLink}
+          />
+        </>
       )}
 
       {view === "category" && (
@@ -508,7 +538,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} categories={categories} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -591,71 +621,166 @@ export default function App() {
   );
 }
 
+function PromoPopup({ promo, navigate, onDismiss }) {
+  if (!promo.enabled) return null;
+  
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <div className="relative w-80 rounded-xl overflow-hidden shadow-lg" style={{ background: PALETTE.card }}>
+        <button
+          onClick={onDismiss}
+          className="absolute top-2 right-2 z-10 p-1 rounded-full hover:bg-gray-200"
+          style={{ background: "rgba(255,255,255,0.8)" }}
+        >
+          <X size={20} style={{ color: PALETTE.ink }} />
+        </button>
+        <img src={promo.image} alt="Promo" className="w-full h-48 object-cover" />
+        <div className="p-4">
+          <p className="text-sm mb-3" style={{ color: PALETTE.muted }}>{promo.text}</p>
+          <button
+            onClick={() => {
+              navigate(`#/category/${slugify(promo.category)}`);
+              onDismiss();
+            }}
+            className="w-full py-2 px-4 rounded-full font-semibold text-white"
+            style={{ background: PALETTE.blue }}
+          >
+            দেখো
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InfiniteCategoryStrip({ products, categories, navigate }) {
-  const list = [...categories, ...categories]; // duplicated for seamless loop
-  const trackRef = useRef(null);
+  const [items, setItems] = useState(categories);
   const pausedRef = useRef(false);
-  const rafRef = useRef(null);
+  const [phase, setPhase] = useState(0); // 0 = resting, 1 = sliding forward, -1 = sliding backward
+  const [instantJump, setInstantJump] = useState(false);
+  const dragStartX = useRef(null);
+  const draggingRef = useRef(false);
+
+  const CARD_WIDTH = 76;
+  const GAP = 16; // matches gap-4
+  const STEP = CARD_WIDTH + GAP;
+
+  // keep in sync if the admin adds/removes categories
+  useEffect(() => { setItems(categories); }, [categories]);
+
+  const stepForward = () => {
+    if (items.length < 2) return;
+    setInstantJump(false);
+    setPhase(1);
+  };
+  const stepBackward = () => {
+    if (items.length < 2) return;
+    setInstantJump(false);
+    setPhase(-1);
+  };
 
   useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const step = () => {
-      if (!pausedRef.current && el) {
-        el.scrollLeft += 0.6;
-        const half = el.scrollWidth / 2;
-        if (el.scrollLeft >= half) {
-          el.scrollLeft -= half;
-        }
-      }
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, []);
+    if (items.length === 0) return;
+    const timer = setInterval(() => {
+      if (pausedRef.current) return;
+      stepForward();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [items.length]);
+
+  useEffect(() => {
+    if (phase === 0) return;
+    // after the slide animation finishes, actually move the item that just
+    // scrolled off into its new position in the line and snap back with no
+    // transition — so there's never a visible "end of the list" moment
+    const t = setTimeout(() => {
+      setInstantJump(true);
+      setItems((prev) => {
+        if (prev.length < 2) return prev;
+        return phase === 1 ? [...prev.slice(1), prev[0]] : [prev[prev.length - 1], ...prev.slice(0, -1)];
+      });
+      setPhase(0);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   const pause = () => { pausedRef.current = true; };
   const resume = () => { pausedRef.current = false; };
 
+  const onTouchStart = (e) => {
+    pause();
+    draggingRef.current = true;
+    dragStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e) => {
+    if (draggingRef.current && dragStartX.current !== null) {
+      const delta = e.changedTouches[0].clientX - dragStartX.current;
+      if (delta < -30) stepForward();
+      else if (delta > 30) stepBackward();
+    }
+    draggingRef.current = false;
+    dragStartX.current = null;
+    resume();
+  };
+
+  // render one clone of the last item before the real list, and one clone
+  // of the first item after it — swiping either direction always reveals
+  // something that looks like a real neighboring card
+  const extended = items.length > 0 ? [items[items.length - 1], ...items, items[0]] : items;
+  const restingIndex = 1;
+  const targetIndex = restingIndex + phase;
+
   return (
     <div
-      ref={trackRef}
-      className="flex gap-4 py-4 overflow-x-auto"
-      style={{ background: PALETTE.card, scrollbarWidth: "none" }}
-      onTouchStart={pause}
-      onTouchEnd={resume}
+      className="py-4 overflow-hidden"
+      style={{ background: PALETTE.card }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
       onMouseDown={pause}
       onMouseUp={resume}
       onMouseLeave={resume}
     >
-      {list.map((cat, i) => {
-        const count = products.filter((p) => p.cat === cat.name).length;
-        return (
-          <button
-            key={cat.name + i}
-            onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
-            className="flex flex-col items-center gap-1.5 flex-shrink-0"
-            style={{ width: 76 }}
-          >
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl shadow-sm overflow-hidden"
-              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft }}
+      <div
+        className="flex gap-4"
+        style={{
+          transform: `translateX(-${targetIndex * STEP}px)`,
+          transition: instantJump ? "none" : "transform 0.4s ease",
+        }}
+      >
+        {extended.map((cat, i) => {
+          const count = products.filter((p) => productCats(p).includes(cat.name)).length;
+          const isActive = i === restingIndex;
+          return (
+            <button
+              key={cat.name + i}
+              onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
+              className="flex flex-col items-center gap-1.5 flex-shrink-0"
+              style={{ width: CARD_WIDTH }}
             >
-              {cat.image ? (
-                <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-              ) : (
-                cat.icon || "🛍️"
-              )}
-            </div>
-            <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-              {cat.name}
-            </span>
-            <span className="text-[10px]" style={{ color: PALETTE.muted }}>
-              ({count})
-            </span>
-          </button>
-        );
-      })}
+              <div
+                className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
+                style={{
+                  background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft,
+                  border: isActive ? "2px solid #E53935" : "2px solid transparent",
+                  transition: instantJump ? "none" : "border-color 0.3s ease",
+                }}
+              >
+                {cat.image ? (
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                ) : (
+                  cat.icon || "🛍️"
+                )}
+              </div>
+              <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+                {cat.name}
+              </span>
+              <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+                ({count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -714,7 +839,7 @@ function SearchView({ products, navigate, onAdd }) {
         const matchesText =
           q === "" ||
           p.title.toLowerCase().includes(q) ||
-          p.cat.toLowerCase().includes(q) ||
+          productCats(p).some((c) => c.toLowerCase().includes(q)) ||
           (p.desc && p.desc.toLowerCase().includes(q));
         const price = p.discount && p.discount > 0 && p.discount < p.price ? p.discount : p.price;
         const matchesMin = min === null || price >= min;
@@ -788,7 +913,7 @@ function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) 
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {categories.map((cat) => {
-          const items = products.filter((p) => p.cat === cat.name);
+          const items = products.filter((p) => productCats(p).includes(cat.name));
           if (items.length === 0 && !cat.image) return null;
           return (
             <div key={cat.name} className="mb-9">
@@ -832,7 +957,7 @@ function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) 
 }
 
 function CategoryView({ category, products, navigate, onAdd, copyLink }) {
-  const items = products.filter((p) => p.cat === category);
+  const items = products.filter((p) => productCats(p).includes(category));
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <button onClick={() => navigate("#/")} className="flex items-center gap-1 text-sm mb-4 font-medium" style={{ color: PALETTE.blue }}>
@@ -950,12 +1075,14 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
   // followed by the general gallery photos — so nothing uploaded gets hidden.
   const images = colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages;
   const forcedIndex = colorImg ? 0 : null;
-  const relatedProducts = products.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 8);
+  const pCats = productCats(p);
+  const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
   const originalPrice = getVariantOriginalPrice(p, size) + ((p.colorAdjust && p.colorAdjust[color]) || 0);
   const isDiscounted = originalPrice > displayPrice;
+  const discountPct = isDiscounted ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100) : 0;
   const youtubeId = getYoutubeId(p.videoUrl);
-  const catInfo = categories && categories.find((c) => c.name === p.cat);
+  const catInfo = categories && categories.find((c) => c.name === pCats[0]);
   const catColor = (catInfo && catInfo.color) || PALETTE.orange;
 
   return (
@@ -966,11 +1093,24 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
 
       <ImageCarousel images={images} title={p.title} forcedIndex={forcedIndex} />
 
-      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${catColor}22`, color: catColor }}>{p.cat}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {pCats.map((cn) => {
+          const ci = categories && categories.find((c) => c.name === cn);
+          const cc = (ci && ci.color) || PALETTE.orange;
+          return (
+            <span key={cn} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${cc}22`, color: cc }}>{cn}</span>
+          );
+        })}
+      </div>
       <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
       <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={displayPrice} /></span>
         {isDiscounted && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={originalPrice} /></span>}
+        {isDiscounted && (
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: `${PALETTE.orange}22`, color: PALETTE.orange }}>
+            {discountPct}% ছাড়
+          </span>
+        )}
       </div>
 
       <div className="mt-5">
@@ -1011,7 +1151,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       {p.desc && (
         <div className="mt-7">
           <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-base font-bold mb-1">প্রোডাক্ট বিবরণ</h3>
-          <p className="text-sm" style={{ color: PALETTE.muted }}>{p.desc}</p>
+          <p className="text-sm whitespace-pre-line" style={{ color: PALETTE.muted }}>{p.desc}</p>
         </div>
       )}
 
@@ -1034,12 +1174,58 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       {relatedProducts.length > 0 && (
         <div className="mt-9">
           <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-lg font-bold mb-3">
-            {p.cat}-এ আরও আছে
+            {pCats[0]}-এ আরও আছে
           </h3>
           <div className="grid grid-cols-2 gap-4">
             {relatedProducts.map((rp) => (
               <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes[0], pp.colors[0])} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "promo" && (
+        <div className="space-y-5">
+          <div className="rounded-2xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <h3 className="font-semibold mb-4">প্রোমো পপ-আপ সেটিংস</h3>
+            
+            <div className="mb-4 flex items-center gap-2">
+              <input type="checkbox" checked={promoPopup.enabled} onChange={(e) => setPromoPopup({ ...promoPopup, enabled: e.target.checked })} id="promo-enable" />
+              <label htmlFor="promo-enable" className="text-sm font-medium">পপ-আপ অন করো</label>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>ব্যানার ছবি</label>
+                <label className="px-4 py-2 rounded-lg border border-dashed flex items-center justify-center gap-2 cursor-pointer" style={{ borderColor: PALETTE.border }}>
+                  <span className="text-sm">ক্লিক করে ছবি আপলোড করো</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                    if (e.target.files[0]) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => setPromoPopup({ ...promoPopup, image: evt.target.result });
+                      reader.readAsDataURL(e.target.files[0]);
+                    }
+                  }} />
+                </label>
+                {promoPopup.image && <img src={promoPopup.image} alt="Promo" className="w-full mt-2 rounded-lg" style={{ maxHeight: 150 }} />}
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>ক্যাটাগরি (বাটনে ক্লিক করলে এই ক্যাটাগরিতে যাবে)</label>
+                <select value={promoPopup.category} onChange={(e) => setPromoPopup({ ...promoPopup, category: e.target.value })} className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }}>
+                  {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium mb-2 block" style={{ color: PALETTE.muted }}>পপ-আপ টেক্সট</label>
+                <input type="text" value={promoPopup.text} onChange={(e) => setPromoPopup({ ...promoPopup, text: e.target.value })} placeholder="নতুন কালেকশন এসেছে! এখনই দেখো →" className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              </div>
+
+              <button onClick={() => {}} className="w-full py-2 px-4 rounded-full font-semibold text-white" style={{ background: PALETTE.blue }}>
+                সংরক্ষণ করুন
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1302,7 +1488,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, categories, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -1321,12 +1507,20 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
   function emptyForm() {
-    return { title: "", cat: categories[0] ? categories[0].name : "", price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
+    return { title: "", cats: categories[0] ? [categories[0].name] : [], price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
   }
+
+  const toggleFormCat = (name) => {
+    setForm((f) => {
+      const has = f.cats.includes(name);
+      const cats = has ? f.cats.filter((c) => c !== name) : [...f.cats, name];
+      return { ...f, cats };
+    });
+  };
 
   const startEdit = (p) => {
     setEditing(p.id);
-    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
+    setForm({ title: p.title, cats: productCats(p), price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
     // Restore color→image pairing for editing. New products store this in
     // p.colorImages directly. Old products (saved before this fix) may have
     // had their general images silently replaced by 1:1 color images — for
@@ -1468,7 +1662,16 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   };
 
   const submit = async () => {
-    if (!form.title.trim() || !form.price) return;
+    if (!form.title.trim() || !form.price || form.cats.length === 0) return;
+    // Warn if a product with the same name already exists, so the same
+    // item doesn't accidentally get uploaded twice.
+    if (!editing) {
+      const dupe = products.find((p) => p.title.trim().toLowerCase() === form.title.trim().toLowerCase());
+      if (dupe) {
+        const proceed = window.confirm(`"${dupe.title}" নামে একটা প্রোডাক্ট আগে থেকেই আছে। তুমি কি নতুন করে আরেকটা যোগ করতে চাও?`);
+        if (!proceed) return;
+      }
+    }
     const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"];
     const sizes = form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"];
     const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -1495,7 +1698,8 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
     const payload = {
       id: editing || ("p" + Date.now()),
       title: form.title.trim(),
-      cat: form.cat,
+      cats: form.cats,
+      cat: form.cats[0] || "",
       price: Number(form.price),
       discount: form.discount ? Number(form.discount) : 0,
       sizes,
@@ -1572,6 +1776,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
         </button>
         <button onClick={() => setTab("banners")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "banners" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ব্যানার</button>
         <button onClick={() => setTab("categories")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "categories" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>ক্যাটাগরি</button>
+        <button onClick={() => setTab("promo")} className="px-4 py-1.5 rounded-full text-sm font-semibold" style={tab === "promo" ? { background: PALETTE.blue, color: "#fff" } : { background: PALETTE.card, color: PALETTE.blue, border: `1px solid ${PALETTE.border}` }}>প্রোমো পপ-আপ</button>
       </div>
 
       {tab === "products" && (
@@ -1580,11 +1785,38 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
             <h3 className="font-semibold mb-3">{editing ? "প্রোডাক্ট এডিট করুন" : "নতুন প্রোডাক্ট যোগ করুন"}</h3>
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="প্রোডাক্ট টাইটেল" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="px-3 py-2 rounded-lg border col-span-2" style={{ borderColor: PALETTE.border }}>
-                {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
+              <div className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }}>
+                <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.muted }}>ক্যাটাগরি (একাধিক বাছাই করা যাবে)</p>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((c) => {
+                    const selected = form.cats.includes(c.name);
+                    return (
+                      <button
+                        type="button"
+                        key={c.name}
+                        onClick={() => toggleFormCat(c.name)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                        style={selected ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border, color: PALETTE.ink }}
+                      >
+                        {selected && <Check size={12} />}
+                        {c.icon || "🛍️"} {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.cats.length === 0 && (
+                  <p className="text-xs mt-2" style={{ color: PALETTE.orange }}>অন্তত একটি ক্যাটাগরি বাছাই করো</p>
+                )}
+              </div>
               <input placeholder="দাম (৳)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+              <div>
+                <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="w-full px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
+                {form.price && form.discount && Number(form.discount) > 0 && Number(form.discount) < Number(form.price) && (
+                  <p className="text-xs mt-1 font-semibold" style={{ color: PALETTE.orange }}>
+                    {Math.round(((Number(form.price) - Number(form.discount)) / Number(form.price)) * 100)}% ছাড় দেখাবে
+                  </p>
+                )}
+              </div>
               <input placeholder="সাইজ (কমা দিয়ে, যেমন: S, M, L)" value={form.sizes} onChange={(e) => setForm({ ...form, sizes: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="কালার (কমা দিয়ে)" value={form.colors} onChange={(e) => setForm({ ...form, colors: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
 
@@ -1715,7 +1947,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                   <img src={p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{p.title}</p>
-                    <p className="text-xs" style={{ color: PALETTE.muted }}>{p.cat} • <Taka amount={p.discount || p.price} /></p>
+                    <p className="text-xs truncate" style={{ color: PALETTE.muted }}>{productCats(p).join(", ")} • <Taka amount={p.discount || p.price} /></p>
                   </div>
                   <button onClick={toggleStock} className="text-[10px] font-semibold px-2 py-1.5 rounded-full flex-shrink-0" style={{ background: outOfStock ? "#FCE4E4" : "#E4F5E9", color: outOfStock ? "#C0392B" : "#1E8E5A" }}>
                     {outOfStock ? "স্টক নেই" : "স্টকে আছে"}
