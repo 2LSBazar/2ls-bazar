@@ -1071,7 +1071,13 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
   const colorImg = p.colorImages && p.colorImages[color];
   // Show the selected color's photo first (if one was uploaded for it),
   // followed by the general gallery photos — so nothing uploaded gets hidden.
-  const images = colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages;
+  // Memoized so the array keeps the same identity across unrelated re-renders;
+  // otherwise the carousel below kept resetting to the first photo and you
+  // couldn't swipe past the color photo to see the rest of the gallery.
+  const images = useMemo(
+    () => (colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages),
+    [colorImg, generalImages]
+  );
   const forcedIndex = colorImg ? 0 : null;
   const pCats = productCats(p);
   const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
