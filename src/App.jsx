@@ -92,6 +92,15 @@ function slugify(text) {
   return encodeURIComponent(text);
 }
 
+// Returns a product's category list. New products store an array in `cats`
+// (so one product can appear in several categories). Older products only
+// have a single `cat` string — fall back to that so nothing breaks.
+function productCats(p) {
+  if (p.cats && p.cats.length > 0) return p.cats;
+  if (p.cat) return [p.cat];
+  return [];
+}
+
 function getYoutubeId(url) {
   if (!url) return null;
   const m = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/);
@@ -629,7 +638,7 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
       onMouseLeave={resume}
     >
       {list.map((cat, i) => {
-        const count = products.filter((p) => p.cat === cat.name).length;
+        const count = products.filter((p) => productCats(p).includes(cat.name)).length;
         return (
           <button
             key={cat.name + i}
@@ -696,22 +705,6 @@ function BannerCarousel({ banners }) {
           style={{ opacity: i === idx ? 1 : 0 }}
         />
       ))}
-      {banners.length > 1 && (
-        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
-          {banners.map((_, i) => (
-            <span
-              key={i}
-              className="rounded-full"
-              style={{
-                width: i === idx ? 16 : 6,
-                height: 6,
-                background: i === idx ? PALETTE.orange : "rgba(255,255,255,0.7)",
-                transition: "width 0.3s",
-              }}
-            />
-          ))}
-        </div>
-      )}
     </section>
   );
 }
@@ -730,7 +723,7 @@ function SearchView({ products, navigate, onAdd }) {
         const matchesText =
           q === "" ||
           p.title.toLowerCase().includes(q) ||
-          p.cat.toLowerCase().includes(q) ||
+          productCats(p).some((c) => c.toLowerCase().includes(q)) ||
           (p.desc && p.desc.toLowerCase().includes(q));
         const price = p.discount && p.discount > 0 && p.discount < p.price ? p.discount : p.price;
         const matchesMin = min === null || price >= min;
@@ -804,7 +797,7 @@ function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) 
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {categories.map((cat) => {
-          const items = products.filter((p) => p.cat === cat.name);
+          const items = products.filter((p) => productCats(p).includes(cat.name));
           if (items.length === 0 && !cat.image) return null;
           return (
             <div key={cat.name} className="mb-9">
@@ -848,7 +841,7 @@ function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) 
 }
 
 function CategoryView({ category, products, navigate, onAdd, copyLink }) {
-  const items = products.filter((p) => p.cat === category);
+  const items = products.filter((p) => productCats(p).includes(category));
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <button onClick={() => navigate("#/")} className="flex items-center gap-1 text-sm mb-4 font-medium" style={{ color: PALETTE.blue }}>
@@ -966,12 +959,13 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
   // followed by the general gallery photos — so nothing uploaded gets hidden.
   const images = colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages;
   const forcedIndex = colorImg ? 0 : null;
-  const relatedProducts = products.filter((x) => x.cat === p.cat && x.id !== p.id).slice(0, 8);
+  const pCats = productCats(p);
+  const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
   const originalPrice = getVariantOriginalPrice(p, size) + ((p.colorAdjust && p.colorAdjust[color]) || 0);
   const isDiscounted = originalPrice > displayPrice;
   const youtubeId = getYoutubeId(p.videoUrl);
-  const catInfo = categories && categories.find((c) => c.name === p.cat);
+  const catInfo = categories && categories.find((c) => c.name === pCats[0]);
   const catColor = (catInfo && catInfo.color) || PALETTE.orange;
 
   return (
@@ -982,7 +976,15 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
 
       <ImageCarousel images={images} title={p.title} forcedIndex={forcedIndex} />
 
-      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${catColor}22`, color: catColor }}>{p.cat}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {pCats.map((cn) => {
+          const ci = categories && categories.find((c) => c.name === cn);
+          const cc = (ci && ci.color) || PALETTE.orange;
+          return (
+            <span key={cn} className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: `${cc}22`, color: cc }}>{cn}</span>
+          );
+        })}
+      </div>
       <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
       <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={displayPrice} /></span>
@@ -1050,7 +1052,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
       {relatedProducts.length > 0 && (
         <div className="mt-9">
           <h3 style={{ fontFamily: "'Baloo Da 2', sans-serif", color: PALETTE.navy }} className="text-lg font-bold mb-3">
-            {p.cat}-এ আরও আছে
+            {pCats[0]}-এ আরও আছে
           </h3>
           <div className="grid grid-cols-2 gap-4">
             {relatedProducts.map((rp) => (
@@ -1337,12 +1339,20 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   const [uploadingCatImage, setUploadingCatImage] = useState(false);
 
   function emptyForm() {
-    return { title: "", cat: categories[0] ? categories[0].name : "", price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
+    return { title: "", cats: categories[0] ? [categories[0].name] : [], price: "", discount: "", sizes: "", colors: "", desc: "", images: "", videoUrl: "", inStock: true };
   }
+
+  const toggleFormCat = (name) => {
+    setForm((f) => {
+      const has = f.cats.includes(name);
+      const cats = has ? f.cats.filter((c) => c !== name) : [...f.cats, name];
+      return { ...f, cats };
+    });
+  };
 
   const startEdit = (p) => {
     setEditing(p.id);
-    setForm({ title: p.title, cat: p.cat, price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
+    setForm({ title: p.title, cats: productCats(p), price: p.price, discount: p.discount || "", sizes: p.sizes.join(", "), colors: p.colors.join(", "), desc: p.desc || "", images: (p.images || []).join(", "), videoUrl: p.videoUrl || "", inStock: p.inStock !== false });
     // Restore color→image pairing for editing. New products store this in
     // p.colorImages directly. Old products (saved before this fix) may have
     // had their general images silently replaced by 1:1 color images — for
@@ -1484,7 +1494,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   };
 
   const submit = async () => {
-    if (!form.title.trim() || !form.price) return;
+    if (!form.title.trim() || !form.price || form.cats.length === 0) return;
     const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"];
     const sizes = form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"];
     const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -1511,7 +1521,8 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
     const payload = {
       id: editing || ("p" + Date.now()),
       title: form.title.trim(),
-      cat: form.cat,
+      cats: form.cats,
+      cat: form.cats[0] || "",
       price: Number(form.price),
       discount: form.discount ? Number(form.discount) : 0,
       sizes,
@@ -1596,9 +1607,29 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
             <h3 className="font-semibold mb-3">{editing ? "প্রোডাক্ট এডিট করুন" : "নতুন প্রোডাক্ট যোগ করুন"}</h3>
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="প্রোডাক্ট টাইটেল" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
-              <select value={form.cat} onChange={(e) => setForm({ ...form, cat: e.target.value })} className="px-3 py-2 rounded-lg border col-span-2" style={{ borderColor: PALETTE.border }}>
-                {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-              </select>
+              <div className="col-span-2 px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }}>
+                <p className="text-xs font-semibold mb-2" style={{ color: PALETTE.muted }}>ক্যাটাগরি (একাধিক বাছাই করা যাবে)</p>
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((c) => {
+                    const selected = form.cats.includes(c.name);
+                    return (
+                      <button
+                        type="button"
+                        key={c.name}
+                        onClick={() => toggleFormCat(c.name)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                        style={selected ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border, color: PALETTE.ink }}
+                      >
+                        {selected && <Check size={12} />}
+                        {c.icon || "🛍️"} {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {form.cats.length === 0 && (
+                  <p className="text-xs mt-2" style={{ color: PALETTE.orange }}>অন্তত একটি ক্যাটাগরি বাছাই করো</p>
+                )}
+              </div>
               <input placeholder="দাম (৳)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="ডিসকাউন্ট প্রাইস (৳, না থাকলে খালি)" type="number" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
               <input placeholder="সাইজ (কমা দিয়ে, যেমন: S, M, L)" value={form.sizes} onChange={(e) => setForm({ ...form, sizes: e.target.value })} className="px-3 py-2 rounded-lg border" style={{ borderColor: PALETTE.border }} />
@@ -1731,7 +1762,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                   <img src={p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{p.title}</p>
-                    <p className="text-xs" style={{ color: PALETTE.muted }}>{p.cat} • <Taka amount={p.discount || p.price} /></p>
+                    <p className="text-xs truncate" style={{ color: PALETTE.muted }}>{productCats(p).join(", ")} • <Taka amount={p.discount || p.price} /></p>
                   </div>
                   <button onClick={toggleStock} className="text-[10px] font-semibold px-2 py-1.5 rounded-full flex-shrink-0" style={{ background: outOfStock ? "#FCE4E4" : "#E4F5E9", color: outOfStock ? "#C0392B" : "#1E8E5A" }}>
                     {outOfStock ? "স্টক নেই" : "স্টকে আছে"}
