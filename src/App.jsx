@@ -241,8 +241,17 @@ export default function App() {
         if (res && res.value) setProducts(JSON.parse(res.value));
         else await window.storage.set("products", JSON.stringify(SEED_PRODUCTS), true);
       } catch (e) {
-        try { await window.storage.set("products", JSON.stringify(SEED_PRODUCTS), true); } catch (_e) {}
+        // IMPORTANT: if reading storage fails (network hiccup, temporary error,
+        // etc.) we must NOT overwrite the real saved products with the seed
+        // list — that would permanently wipe out everything the admin added.
+        // Just keep showing the local SEED_PRODUCTS fallback in the UI and
+        // try again next time the page loads; the shared storage itself is
+        // left untouched.
       }
+      try {
+        const ores = await window.storage.get("orders", true);
+        if (ores && ores.value) setOrders(JSON.parse(ores.value));
+      } catch (e) {}
       try {
         const bres = await window.storage.get("banners", true);
         if (bres && bres.value) {
@@ -264,42 +273,21 @@ export default function App() {
   }, []);
 
   const saveProducts = async (next) => {
+    const json = JSON.stringify(next);
+    // Warn before hitting the hard storage limit instead of failing silently.
+    if (json.length > 4_500_000) {
+      alert("প্রোডাক্ট লিস্ট সাইজ লিমিটের কাছাকাছি চলে গেছে (৪.৫MB+)। নতুন প্রোডাক্ট যোগ করার আগে কিছু পুরনো/অপ্রয়োজনীয় প্রোডাক্ট মুছে ফেলুন, নাহলে সেভ ব্যর্থ হতে পারে।");
+    }
     setProducts(next);
-    try { await window.storage.set("products", JSON.stringify(next), true); } catch (e) {}
-  };
-  // Orders contain personal info (name/phone/address), so they are only ever
-  // loaded after the admin logs in — never on page load for anonymous visitors.
-  const loadOrders = async () => {
     try {
-      const ores = await window.storage.get("orders", true);
-      if (ores && ores.value) {
-        const parsed = JSON.parse(ores.value);
-        setOrders(parsed);
-        return parsed;
-      }
-    } catch (e) {}
-    return [];
+      await window.storage.set("products", json, true);
+    } catch (e) {
+      alert("প্রোডাক্ট সেভ করা যায়নি! স্টোরেজ লিমিট শেষ হয়ে থাকতে পারে। পেজ রিফ্রেশ করে আবার চেষ্টা করুন, প্রয়োজনে কিছু প্রোডাক্ট মুছে জায়গা খালি করুন।");
+    }
   };
   const saveOrders = async (next) => {
     setOrders(next);
     try { await window.storage.set("orders", JSON.stringify(next), true); } catch (e) {}
-    // Also keep a lightweight, name/address-free public summary so customers
-    // can track their own order by Order ID + phone without exposing everyone
-    // else's personal details.
-    try {
-      const summary = {};
-      next.forEach((o) => {
-        summary[o.id] = {
-          phone: o.phone,
-          status: o.status,
-          paymentMethod: o.paymentMethod || "cod",
-          paymentVerified: !!o.paymentVerified,
-          total: o.total,
-          time: o.time,
-        };
-      });
-      await window.storage.set("order_status", JSON.stringify(summary), true);
-    } catch (e) {}
   };
   const saveBanners = async (next) => {
     setBanners(next);
@@ -373,7 +361,6 @@ export default function App() {
   else if (parts[0] === "order-done") view = "done";
   else if (parts[0] === "admin") view = "admin";
   else if (parts[0] === "search") view = "search";
-  else if (parts[0] === "track") view = "track";
 
   if (!loaded) {
     return <div style={{ background: PALETTE.bg, minHeight: "100vh" }} />;
@@ -394,14 +381,8 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => navigate("#/track")} className="p-2 rounded-full" style={{ background: "#E4F5E9", color: "#1E8E5A" }} title="অর্ডার ট্র্যাক করুন">
-              <ClipboardList size={18} />
-            </button>
             <button onClick={() => navigate("#/search")} className="p-2 rounded-full" style={{ background: "#E4EEF8", color: PALETTE.blue }} title="সার্চ">
               <Search size={18} />
-            </button>
-            <button onClick={() => navigate("#/admin")} className="p-2 rounded-full" style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }} title="অ্যাডমিন">
-              <LayoutDashboard size={18} />
             </button>
             <button onClick={() => setCartOpen(true)} className="relative flex items-center gap-2 px-3 py-2 rounded-full" style={{ background: PALETTE.orange, color: "#fff" }}>
               <ShoppingBag size={18} />
@@ -458,8 +439,6 @@ export default function App() {
       {view === "search" && (
         <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])} />
       )}
-
-      {view === "track" && <TrackOrderView orders={orders} navigate={navigate} />}
 
       {view === "admin" && (
         <AdminView products={products} orders={orders} banners={banners} categories={categories} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
@@ -1043,7 +1022,6 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
       paymentMethod: form.paymentMethod,
       trxId: form.paymentMethod === "bkash" ? form.trxId.trim() : "",
       status: "পেন্ডিং",
-      paymentVerified: false,
       time: new Date().toISOString(),
     };
     await onOrder(order);
@@ -1158,96 +1136,6 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
   );
 }
 
-function TrackOrderView({ orders, navigate }) {
-  const [orderId, setOrderId] = useState("");
-  const [phone, setPhone] = useState("");
-  const [result, setResult] = useState(null); // null = not searched, "notfound" | order object
-  const statusSteps = ["পেন্ডিং", "কনফার্ম হয়েছে", "ডেলিভারি হচ্ছে", "ডেলিভার হয়েছে"];
-
-  const search = () => {
-    const found = orders.find(
-      (o) => o.id.trim().toUpperCase() === orderId.trim().toUpperCase() && o.phone.trim() === phone.trim()
-    );
-    setResult(found || "notfound");
-  };
-
-  const currentStepIndex = result && result !== "notfound" ? statusSteps.indexOf(result.status) : -1;
-
-  return (
-    <div className="max-w-md mx-auto px-4 py-8">
-      <button onClick={() => navigate("#/")} className="flex items-center gap-1 text-sm mb-4 font-medium" style={{ color: PALETTE.blue }}>
-        <ArrowLeft size={16} /> হোমে ফিরে যান
-      </button>
-      <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mb-1">অর্ডার ট্র্যাক করুন</h2>
-      <p className="text-sm mb-5" style={{ color: PALETTE.muted }}>অর্ডার আইডি ও ফোন নম্বর দিয়ে অর্ডারের অবস্থা দেখো</p>
-
-      <div className="space-y-3">
-        <input
-          value={orderId}
-          onChange={(e) => setOrderId(e.target.value)}
-          placeholder="অর্ডার আইডি (যেমন: 2LS123456)"
-          className="w-full px-3 py-2 rounded-lg border bg-white"
-          style={{ borderColor: PALETTE.border }}
-        />
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="ফোন নম্বর"
-          className="w-full px-3 py-2 rounded-lg border bg-white"
-          style={{ borderColor: PALETTE.border }}
-        />
-        <button onClick={search} className="w-full py-2.5 rounded-full font-semibold" style={{ background: PALETTE.blue, color: "#fff" }}>
-          খুঁজুন
-        </button>
-      </div>
-
-      {result === "notfound" && (
-        <p className="text-sm text-center mt-6" style={{ color: PALETTE.orange }}>এই অর্ডার আইডি ও ফোন নম্বর মিলিয়ে কিছু পাওয়া যায়নি। আবার চেক করো।</p>
-      )}
-
-      {result && result !== "notfound" && (
-        <div className="mt-6 rounded-xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-          <p className="font-bold text-sm mb-1" style={{ color: PALETTE.blue }}>{result.id}</p>
-          <p className="text-xs mb-4" style={{ color: PALETTE.muted }}>{new Date(result.time).toLocaleString("bn-BD")}</p>
-
-          {result.status === "বাতিল" ? (
-            <p className="text-sm font-semibold" style={{ color: "#C0392B" }}>এই অর্ডারটি বাতিল করা হয়েছে</p>
-          ) : (
-            <div className="space-y-3 mb-4">
-              {statusSteps.map((step, i) => (
-                <div key={step} className="flex items-center gap-3">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: i <= currentStepIndex ? "#1E8E5A" : PALETTE.border }}
-                  >
-                    {i <= currentStepIndex && <Check size={14} color="#fff" />}
-                  </div>
-                  <span className="text-sm font-medium" style={{ color: i <= currentStepIndex ? PALETTE.ink : PALETTE.muted }}>{step}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="pt-3 border-t" style={{ borderColor: PALETTE.border }}>
-            {result.paymentMethod === "bkash" ? (
-              <p className="text-sm">
-                বিকাশ পেমেন্ট:{" "}
-                <span style={{ color: result.paymentVerified ? "#1E8E5A" : PALETTE.orange, fontWeight: 700 }}>
-                  <Taka amount={result.total} /> {result.paymentVerified ? "✓ ভেরিফাইড" : "(যাচাই হচ্ছে)"}
-                </span>
-              </p>
-            ) : (
-              <p className="text-sm">
-                সর্বমোট: <span style={{ fontWeight: 700, color: PALETTE.blue }}><Taka amount={result.total} /></span> (ক্যাশ অন ডেলিভারি)
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function DoneView({ navigate, orders }) {
   const order = orders[0];
   return (
@@ -1267,14 +1155,9 @@ function DoneView({ navigate, orders }) {
           </p>
         </>
       )}
-      <div className="flex gap-2 justify-center">
-        <button onClick={() => navigate("#/")} className="px-6 py-2.5 rounded-full font-semibold" style={{ background: PALETTE.blue, color: "#fff" }}>
-          আরও কেনাকাটা করুন
-        </button>
-        <button onClick={() => navigate("#/track")} className="px-6 py-2.5 rounded-full font-semibold border" style={{ borderColor: PALETTE.border, color: PALETTE.blue }}>
-          অর্ডার ট্র্যাক করুন
-        </button>
-      </div>
+      <button onClick={() => navigate("#/")} className="px-6 py-2.5 rounded-full font-semibold" style={{ background: PALETTE.blue, color: "#fff" }}>
+        আরও কেনাকাটা করুন
+      </button>
     </section>
   );
 }
@@ -1487,6 +1370,8 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
   };
 
   const remove = async (id) => {
+    const p = products.find((x) => x.id === id);
+    if (!window.confirm(`"${p ? p.title : "এই প্রোডাক্ট"}" সত্যিই ডিলিট করতে চান?`)) return;
     await saveProducts(products.filter((p) => p.id !== id));
     if (editing === id) resetForm();
   };
@@ -1714,10 +1599,6 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
               const next = orders.map((x) => (x.id === o.id ? { ...x, status: newStatus } : x));
               await saveOrders(next);
             };
-            const toggleVerify = async () => {
-              const next = orders.map((x) => (x.id === o.id ? { ...x, paymentVerified: !x.paymentVerified } : x));
-              await saveOrders(next);
-            };
             return (
               <div key={o.id} className="p-4 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
                 <div className="flex justify-between items-start mb-1">
@@ -1726,24 +1607,13 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                 </div>
                 <p className="text-sm">{o.name} • {o.phone}</p>
                 <p className="text-xs" style={{ color: PALETTE.muted }}>{o.address} ({o.area === "dhaka" ? "ঢাকার ভেতরে" : "ঢাকার বাইরে"})</p>
-                <div className="flex items-center justify-between mt-1">
-                  <p className="text-xs">
-                    {o.paymentMethod === "bkash" ? (
-                      <span style={{ color: "#E2136E", fontWeight: 600 }}>বিকাশ পেমেন্ট • TrxID: {o.trxId || "দেওয়া হয়নি"}</span>
-                    ) : (
-                      <span style={{ color: PALETTE.muted }}>ক্যাশ অন ডেলিভারি</span>
-                    )}
-                  </p>
-                  {o.paymentMethod === "bkash" && (
-                    <button
-                      onClick={toggleVerify}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-full flex-shrink-0"
-                      style={{ background: o.paymentVerified ? "#E4F5E9" : "#FCE4E4", color: o.paymentVerified ? "#1E8E5A" : "#C0392B" }}
-                    >
-                      {o.paymentVerified ? "✓ ভেরিফাইড" : "ভেরিফাই করো"}
-                    </button>
+                <p className="text-xs mt-1">
+                  {o.paymentMethod === "bkash" ? (
+                    <span style={{ color: "#E2136E", fontWeight: 600 }}>বিকাশ পেমেন্ট • TrxID: {o.trxId || "দেওয়া হয়নি"}</span>
+                  ) : (
+                    <span style={{ color: PALETTE.muted }}>ক্যাশ অন ডেলিভারি</span>
                   )}
-                </div>
+                </p>
                 <div className="mt-2 text-xs">
                   {o.items.map((it, idx) => (
                     <div key={idx} className="flex justify-between">
@@ -1754,7 +1624,7 @@ function AdminView({ products, orders, banners, categories, saveProducts, saveOr
                 </div>
                 <div className="flex justify-between font-bold text-sm mt-2 pt-2 border-t" style={{ borderColor: PALETTE.border }}>
                   <span>সর্বমোট</span>
-                  <span style={{ color: o.paymentMethod === "bkash" && o.paymentVerified ? "#1E8E5A" : PALETTE.orange }}><Taka amount={o.total} /></span>
+                  <span style={{ color: PALETTE.orange }}><Taka amount={o.total} /></span>
                 </div>
                 <div className="mt-3">
                   <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>অর্ডার স্ট্যাটাস</label>
