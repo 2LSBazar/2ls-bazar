@@ -602,9 +602,13 @@ export default function App() {
 
 function InfiniteCategoryStrip({ products, categories, navigate }) {
   const list = [...categories, ...categories]; // duplicated for seamless loop
-  const itemRefs = useRef([]);
   const pausedRef = useRef(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [instantJump, setInstantJump] = useState(false);
+
+  const CARD_WIDTH = 76;
+  const GAP = 16; // matches gap-4
+  const STEP = CARD_WIDTH + GAP;
 
   useEffect(() => {
     if (categories.length === 0) return;
@@ -612,67 +616,73 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
       if (pausedRef.current) return;
       setActiveIndex((i) => {
         const next = i + 1;
-        // once we've scrolled through the duplicated half, jump back to
-        // the start instantly so the loop looks endless
-        return next >= categories.length * 2 ? 0 : next;
+        if (next >= categories.length * 2) {
+          // reached the duplicated half — snap back to start with no
+          // transition so the loop feels endless instead of jumping
+          setInstantJump(true);
+          return 0;
+        }
+        setInstantJump(false);
+        return next;
       });
     }, 1000);
     return () => clearInterval(timer);
   }, [categories.length]);
-
-  useEffect(() => {
-    const el = itemRefs.current[activeIndex];
-    if (el) {
-      el.scrollIntoView({ behavior: activeIndex === 0 ? "auto" : "smooth", inline: "center", block: "nearest" });
-    }
-  }, [activeIndex]);
 
   const pause = () => { pausedRef.current = true; };
   const resume = () => { pausedRef.current = false; };
 
   return (
     <div
-      className="flex gap-4 py-4 overflow-x-auto"
-      style={{ background: PALETTE.card, scrollbarWidth: "none" }}
+      className="py-4 overflow-hidden"
+      style={{ background: PALETTE.card }}
       onTouchStart={pause}
       onTouchEnd={resume}
       onMouseDown={pause}
       onMouseUp={resume}
       onMouseLeave={resume}
     >
-      {list.map((cat, i) => {
-        const count = products.filter((p) => productCats(p).includes(cat.name)).length;
-        const isActive = i === activeIndex;
-        return (
-          <button
-            key={cat.name + i}
-            ref={(el) => (itemRefs.current[i] = el)}
-            onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
-            className="flex flex-col items-center gap-1.5 flex-shrink-0"
-            style={{ width: 76 }}
-          >
-            <div
-              className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden transition-all"
-              style={{
-                background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft,
-                border: isActive ? "2px solid #E53935" : "2px solid transparent",
-              }}
+      <div
+        className="flex gap-4"
+        style={{
+          transform: `translateX(-${activeIndex * STEP}px)`,
+          transition: instantJump ? "none" : "transform 0.5s ease",
+        }}
+      >
+        {list.map((cat, i) => {
+          const count = products.filter((p) => productCats(p).includes(cat.name)).length;
+          const isActive = i === activeIndex;
+          return (
+            <button
+              key={cat.name + i}
+              onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
+              className="flex flex-col items-center gap-1.5 flex-shrink-0"
+              style={{ width: CARD_WIDTH }}
             >
-              {cat.image ? (
-                <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-              ) : (
-                cat.icon || "🛍️"
-              )}
-            </div>
-            <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-              {cat.name}
-            </span>
-            <span className="text-[10px]" style={{ color: PALETTE.muted }}>
-              ({count})
-            </span>
-          </button>
-        );
-      })}
+              <div
+                className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
+                style={{
+                  background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft,
+                  border: isActive ? "2px solid #E53935" : "2px solid transparent",
+                  transition: instantJump ? "none" : "border-color 0.3s ease",
+                }}
+              >
+                {cat.image ? (
+                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+                ) : (
+                  cat.icon || "🛍️"
+                )}
+              </div>
+              <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+                {cat.name}
+              </span>
+              <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+                ({count})
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
