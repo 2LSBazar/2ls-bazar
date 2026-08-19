@@ -980,7 +980,7 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
   );
 }
 
-function ImageCarousel({ images, title, forcedIndex }) {
+function ImageCarousel({ images, title }) {
   const [idx, setIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchDeltaX = useRef(0);
@@ -990,19 +990,12 @@ function ImageCarousel({ images, title, forcedIndex }) {
   }, [images]);
 
   useEffect(() => {
-    if (forcedIndex !== null && forcedIndex !== undefined) {
-      setIdx(forcedIndex);
-    }
-  }, [forcedIndex]);
-
-  useEffect(() => {
     if (images.length <= 1) return;
-    if (forcedIndex !== null && forcedIndex !== undefined) return;
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % images.length);
     }, 3000);
     return () => clearInterval(t);
-  }, [images.length, forcedIndex]);
+  }, [images.length]);
 
   const next = () => setIdx((i) => (i + 1) % images.length);
   const prev = () => setIdx((i) => (i - 1 + images.length) % images.length);
@@ -1068,17 +1061,17 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
     );
   }
   const generalImages = p.images && p.images.length > 0 ? p.images : (!p.colorImages || Object.keys(p.colorImages).length === 0 ? [`https://picsum.photos/seed/${p.seed || p.id}/500/600`] : []);
-  const colorImg = p.colorImages && p.colorImages[color];
-  // Show the selected color's photo first (if one was uploaded for it),
-  // followed by the general gallery photos — so nothing uploaded gets hidden.
-  // Memoized so the array keeps the same identity across unrelated re-renders;
-  // otherwise the carousel below kept resetting to the first photo and you
-  // couldn't swipe past the color photo to see the rest of the gallery.
-  const images = useMemo(
-    () => (colorImg ? [colorImg, ...generalImages.filter((img) => img !== colorImg)] : generalImages),
-    [colorImg, generalImages]
+  // All uploaded photos — every color's photo plus the general gallery
+  // photos — are shown together in one gallery, no matter which color is
+  // currently selected. Duplicates (same URL used twice) are removed.
+  const allColorImages = useMemo(
+    () => (p.colorImages ? Object.values(p.colorImages) : []),
+    [p.colorImages]
   );
-  const forcedIndex = colorImg ? 0 : null;
+  const images = useMemo(() => {
+    const combined = [...allColorImages, ...generalImages];
+    return combined.filter((img, i) => combined.indexOf(img) === i);
+  }, [allColorImages, generalImages]);
   const pCats = productCats(p);
   const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
@@ -1095,7 +1088,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         <ArrowLeft size={16} /> হোমে ফিরে যান
       </button>
 
-      <ImageCarousel images={images} title={p.title} forcedIndex={forcedIndex} />
+      <ImageCarousel images={images} title={p.title} />
 
       <div className="flex flex-wrap gap-1.5">
         {pCats.map((cn) => {
