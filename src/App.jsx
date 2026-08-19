@@ -1069,7 +1069,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
     [p.colorImages]
   );
   const images = useMemo(() => {
-    const combined = [...allColorImages, ...generalImages];
+    const combined = [...generalImages, ...allColorImages];
     return combined.filter((img, i) => combined.indexOf(img) === i);
   }, [allColorImages, generalImages]);
   const pCats = productCats(p);
