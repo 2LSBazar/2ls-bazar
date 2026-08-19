@@ -980,7 +980,7 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
   );
 }
 
-function ImageCarousel({ images, title, jumpTo }) {
+function ImageCarousel({ images, title }) {
   const [idx, setIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchDeltaX = useRef(0);
@@ -988,16 +988,6 @@ function ImageCarousel({ images, title, jumpTo }) {
   useEffect(() => {
     setIdx(0);
   }, [images]);
-
-  // When the selected color changes, jump the carousel to that color's photo
-  // (if it has one) — but only once, as a one-time nudge. After that the
-  // person can freely swipe/click through the whole gallery as normal.
-  useEffect(() => {
-    if (jumpTo) {
-      const i = images.indexOf(jumpTo);
-      if (i !== -1) setIdx(i);
-    }
-  }, [jumpTo]);
 
   useEffect(() => {
     if (images.length <= 1) return;
@@ -1082,7 +1072,6 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
     const combined = [...allColorImages, ...generalImages];
     return combined.filter((img, i) => combined.indexOf(img) === i);
   }, [allColorImages, generalImages]);
-  const colorImg = p.colorImages && p.colorImages[color];
   const pCats = productCats(p);
   const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
@@ -1099,7 +1088,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         <ArrowLeft size={16} /> হোমে ফিরে যান
       </button>
 
-      <ImageCarousel images={images} title={p.title} jumpTo={colorImg} />
+      <ImageCarousel images={images} title={p.title} />
 
       <div className="flex flex-wrap gap-1.5">
         {pCats.map((cn) => {
