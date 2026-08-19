@@ -980,7 +980,7 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
   );
 }
 
-function ImageCarousel({ images, title }) {
+function ImageCarousel({ images, title, jumpTo }) {
   const [idx, setIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchDeltaX = useRef(0);
@@ -989,13 +989,24 @@ function ImageCarousel({ images, title }) {
     setIdx(0);
   }, [images]);
 
+  // When the selected color has its own photo, jump the gallery to it and
+  // hold there — no auto-slide while a color's photo is being shown. The
+  // person can still swipe/click through the rest of the gallery by hand.
+  useEffect(() => {
+    if (jumpTo) {
+      const i = images.indexOf(jumpTo);
+      if (i !== -1) setIdx(i);
+    }
+  }, [jumpTo, images]);
+
   useEffect(() => {
     if (images.length <= 1) return;
+    if (jumpTo) return;
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % images.length);
     }, 3000);
     return () => clearInterval(t);
-  }, [images.length]);
+  }, [images.length, jumpTo]);
 
   const next = () => setIdx((i) => (i + 1) % images.length);
   const prev = () => setIdx((i) => (i - 1 + images.length) % images.length);
@@ -1072,6 +1083,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
     const combined = [...generalImages, ...allColorImages];
     return combined.filter((img, i) => combined.indexOf(img) === i);
   }, [allColorImages, generalImages]);
+  const colorImg = p.colorImages && p.colorImages[color];
   const pCats = productCats(p);
   const relatedProducts = products.filter((x) => x.id !== p.id && productCats(x).some((c) => pCats.includes(c))).slice(0, 8);
   const displayPrice = getVariantPrice(p, size, color);
@@ -1088,7 +1100,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         <ArrowLeft size={16} /> হোমে ফিরে যান
       </button>
 
-      <ImageCarousel images={images} title={p.title} />
+      <ImageCarousel images={images} title={p.title} jumpTo={colorImg} />
 
       <div className="flex flex-wrap gap-1.5">
         {pCats.map((cn) => {
