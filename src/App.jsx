@@ -1061,8 +1061,9 @@ function ImageCarousel({ images, title, jumpTo }) {
 
 function ProductView({ productId, products, categories, navigate, onAdd, copyLink }) {
   const p = products.find((x) => x.id === productId);
-  const [size, setSize] = useState(p?.sizes[0]);
-  const [color, setColor] = useState(p?.colors[0]);
+  const [size, setSize] = useState(null);
+  const [color, setColor] = useState(null);
+  const [selectionError, setSelectionError] = useState("");
   if (!p) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
@@ -1126,7 +1127,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         <p className="text-sm font-semibold mb-1">সাইজ</p>
         <div className="flex gap-2 flex-wrap">
           {p.sizes.map((s) => (
-            <button key={s} onClick={() => setSize(s)} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
+            <button key={s} onClick={() => { setSize(s); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
               {s}
             </button>
           ))}
@@ -1136,7 +1137,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
         <p className="text-sm font-semibold mb-1">কালার</p>
         <div className="flex gap-2 flex-wrap">
           {p.colors.map((c) => (
-            <button key={c} onClick={() => setColor(c)} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
+            <button key={c} onClick={() => { setColor(c); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
               {c}
             </button>
           ))}
@@ -1145,7 +1146,19 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
 
       <div className="flex gap-2 mt-5">
         <button
-          onClick={() => p.inStock !== false && onAdd(p, size, color)}
+          onClick={() => {
+            if (p.inStock === false) return;
+            if (p.sizes && p.sizes.length > 0 && !size) {
+              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
+              return;
+            }
+            if (p.colors && p.colors.length > 0 && !color) {
+              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
+              return;
+            }
+            setSelectionError("");
+            onAdd(p, size, color);
+          }}
           disabled={p.inStock === false}
           className="flex-1 py-3 rounded-full font-semibold"
           style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.orange, color: "#fff" }}
@@ -1156,6 +1169,11 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
           <Share2 size={18} color={PALETTE.blue} />
         </button>
       </div>
+      {selectionError && (
+        <p className="text-xs mt-2 font-medium" style={{ color: "#E2136E" }}>
+          {selectionError}
+        </p>
+      )}
       {p.codEnabled === false && (
         <p className="text-xs mt-2 font-medium" style={{ color: "#E2136E" }}>
           এই প্রোডাক্টে ক্যাশ অন ডেলিভারি নেই — শুধু বিকাশে পেমেন্ট করে অর্ডার করা যাবে।
