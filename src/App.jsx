@@ -275,6 +275,7 @@ export default function App() {
   const [products, setProducts] = useState(SEED_PRODUCTS);
   const [orders, setOrders] = useState([]);
   const [banners, setBanners] = useState([BANNER]);
+  const [bannerStyle, setBannerStyle] = useState("fade");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -339,6 +340,10 @@ export default function App() {
         }
       } catch (e) {}
       try {
+        const bsres = await window.storage.get("bannerStyle", true);
+        if (bsres && bsres.value) setBannerStyle(bsres.value);
+      } catch (e) {}
+      try {
         const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
@@ -376,6 +381,10 @@ export default function App() {
   const saveBanners = async (next) => {
     setBanners(next);
     try { await window.storage.set("banners", JSON.stringify(next), true); } catch (e) {}
+  };
+  const saveBannerStyle = async (next) => {
+    setBannerStyle(next);
+    try { await window.storage.set("bannerStyle", next, true); } catch (e) {}
   };
   const saveCategories = async (next) => {
     setCategories(next);
@@ -496,6 +505,7 @@ export default function App() {
           <HomeView
             products={products}
             banners={banners}
+            bannerStyle={bannerStyle}
             categories={categories}
             navigate={navigate}
             onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
@@ -536,7 +546,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -783,7 +793,7 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
   );
 }
 
-function BannerCarousel({ banners }) {
+function BannerCarousel({ banners, styleType = "fade" }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     setIdx(0);
@@ -795,28 +805,40 @@ function BannerCarousel({ banners }) {
     }, 4000);
     return () => clearInterval(t);
   }, [banners.length]);
+
+  if (styleType === "slide") {
+    return (
+      <section className="relative overflow-hidden" style={{ aspectRatio: "1280/533" }}>
+        <div className="w-full h-full flex" style={{ transform: `translateX(-${idx * 100}%)`, transition: "transform 0.7s ease-in-out" }}>
+          {banners.map((src, i) => (
+            <img key={i} src={src} alt="2LS Bazar Banner" className="w-full h-full object-cover flex-shrink-0" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="relative overflow-hidden" style={{ aspectRatio: "1280/533" }}>
-      <style>{`
-        @keyframes bannerzoom {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.08); }
-          100% { transform: scale(1); }
-        }
-        .banner-zoom-img {
-          animation: bannerzoom 8s ease-in-out infinite;
-        }
-        .banner-fade {
-          transition: opacity 0.8s ease-in-out;
-        }
-      `}</style>
+      {styleType === "zoom" && (
+        <style>{`
+          @keyframes bannerzoom {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+          }
+          .banner-zoom-img {
+            animation: bannerzoom 8s ease-in-out infinite;
+          }
+        `}</style>
+      )}
       {banners.map((src, i) => (
         <img
           key={i}
           src={src}
           alt="2LS Bazar Banner"
-          className="w-full h-full object-cover absolute inset-0 banner-fade banner-zoom-img"
-          style={{ opacity: i === idx ? 1 : 0 }}
+          className={`w-full h-full object-cover absolute inset-0${styleType === "zoom" ? " banner-zoom-img" : ""}`}
+          style={{ opacity: i === idx ? 1 : 0, transition: "opacity 0.8s ease-in-out" }}
         />
       ))}
     </section>
@@ -902,10 +924,10 @@ function SearchView({ products, navigate, onAdd }) {
   );
 }
 
-function HomeView({ products, banners, categories, navigate, onAdd, copyLink }) {
+function HomeView({ products, banners, bannerStyle, categories, navigate, onAdd, copyLink }) {
   return (
     <>
-      <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} />
+      <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} styleType={bannerStyle} />
 
       <InfiniteCategoryStrip products={products} categories={categories} navigate={navigate} />
 
@@ -1510,7 +1532,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -2062,6 +2084,26 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
 
       {tab === "banners" && (
         <div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>ব্যানার পরিবর্তনের স্টাইল</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { v: "fade", label: "ফেড (নরমাল)" },
+                { v: "slide", label: "স্লাইড" },
+                { v: "zoom", label: "জুম" },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => saveBannerStyle(opt.v)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold border"
+                  style={(bannerStyle || "fade") === opt.v ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border, color: PALETTE.ink }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
             <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>নতুন ব্যানার ছবি আপলোড করো (একাধিক বেছে নিতে পারো)</label>
             <input
