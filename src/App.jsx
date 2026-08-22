@@ -276,6 +276,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [banners, setBanners] = useState([BANNER]);
   const [bannerStyle, setBannerStyle] = useState("fade");
+  const [categoryAutoSlide, setCategoryAutoSlide] = useState(true);
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -344,6 +345,10 @@ export default function App() {
         if (bsres && bsres.value) setBannerStyle(bsres.value);
       } catch (e) {}
       try {
+        const casres = await window.storage.get("categoryAutoSlide", true);
+        if (casres && casres.value) setCategoryAutoSlide(casres.value !== "off");
+      } catch (e) {}
+      try {
         const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
@@ -385,6 +390,10 @@ export default function App() {
   const saveBannerStyle = async (next) => {
     setBannerStyle(next);
     try { await window.storage.set("bannerStyle", next, true); } catch (e) {}
+  };
+  const saveCategoryAutoSlide = async (next) => {
+    setCategoryAutoSlide(next);
+    try { await window.storage.set("categoryAutoSlide", next ? "on" : "off", true); } catch (e) {}
   };
   const saveCategories = async (next) => {
     setCategories(next);
@@ -506,6 +515,7 @@ export default function App() {
             products={products}
             banners={banners}
             bannerStyle={bannerStyle}
+            categoryAutoSlide={categoryAutoSlide}
             categories={categories}
             navigate={navigate}
             onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
@@ -546,7 +556,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -661,134 +671,87 @@ function PromoPopup({ promo, navigate, onDismiss }) {
   );
 }
 
-function InfiniteCategoryStrip({ products, categories, navigate }) {
-  const [items, setItems] = useState(categories);
+function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = true }) {
+  const scrollRef = useRef(null);
   const pausedRef = useRef(false);
-  const [phase, setPhase] = useState(0); // 0 = resting, 1 = sliding forward, -1 = sliding backward
-  const [instantJump, setInstantJump] = useState(false);
-  const dragStartX = useRef(null);
-  const draggingRef = useRef(false);
-
+  const resumeTimerRef = useRef(null);
   const CARD_WIDTH = 76;
-  const GAP = 16; // matches gap-4
+  const GAP = 16;
   const STEP = CARD_WIDTH + GAP;
 
-  // keep in sync if the admin adds/removes categories
-  useEffect(() => { setItems(categories); }, [categories]);
-
-  const stepForward = () => {
-    if (items.length < 2) return;
-    setInstantJump(false);
-    setPhase(1);
-  };
-  const stepBackward = () => {
-    if (items.length < 2) return;
-    setInstantJump(false);
-    setPhase(-1);
-  };
-
+  // Auto-slide gently nudges the strip forward every few seconds, but the
+  // user can freely drag/scroll it by hand at any time — dragging pauses
+  // auto-slide for a moment so it never fights the user's finger.
   useEffect(() => {
-    if (items.length === 0) return;
+    if (!autoSlide || categories.length < 2) return;
     const timer = setInterval(() => {
-      if (pausedRef.current) return;
-      stepForward();
+      const el = scrollRef.current;
+      if (!el || pausedRef.current) return;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
+      if (el.scrollLeft >= maxScroll - 4) {
+        el.scrollTo({ left: 0, behavior: "smooth" });
+      } else {
+        el.scrollTo({ left: el.scrollLeft + STEP, behavior: "smooth" });
+      }
     }, 3000);
     return () => clearInterval(timer);
-  }, [items.length]);
+  }, [autoSlide, categories.length]);
 
-  useEffect(() => {
-    if (phase === 0) return;
-    // after the slide animation finishes, actually move the item that just
-    // scrolled off into its new position in the line and snap back with no
-    // transition — so there's never a visible "end of the list" moment
-    const t = setTimeout(() => {
-      setInstantJump(true);
-      setItems((prev) => {
-        if (prev.length < 2) return prev;
-        return phase === 1 ? [...prev.slice(1), prev[0]] : [prev[prev.length - 1], ...prev.slice(0, -1)];
-      });
-      setPhase(0);
-    }, 400);
-    return () => clearTimeout(t);
-  }, [phase]);
-
-  const pause = () => { pausedRef.current = true; };
-  const resume = () => { pausedRef.current = false; };
-
-  const onTouchStart = (e) => {
-    pause();
-    draggingRef.current = true;
-    dragStartX.current = e.touches[0].clientX;
+  const pause = () => {
+    pausedRef.current = true;
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
   };
-  const onTouchEnd = (e) => {
-    if (draggingRef.current && dragStartX.current !== null) {
-      const delta = e.changedTouches[0].clientX - dragStartX.current;
-      if (delta < -30) stepForward();
-      else if (delta > 30) stepBackward();
-    }
-    draggingRef.current = false;
-    dragStartX.current = null;
-    resume();
+  const resumeSoon = () => {
+    if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
+    resumeTimerRef.current = setTimeout(() => { pausedRef.current = false; }, 1500);
   };
-
-  // render one clone of the last item before the real list, and one clone
-  // of the first item after it — swiping either direction always reveals
-  // something that looks like a real neighboring card
-  const extended = items.length > 0 ? [items[items.length - 1], ...items, items[0]] : items;
-  const restingIndex = 1;
-  const targetIndex = restingIndex + phase;
 
   return (
     <div
-      className="py-4 overflow-hidden"
-      style={{ background: PALETTE.card }}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
+      ref={scrollRef}
+      className="flex gap-4 py-4 px-1"
+      style={{
+        background: PALETTE.card,
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
+      }}
+      onTouchStart={pause}
+      onTouchEnd={resumeSoon}
       onMouseDown={pause}
-      onMouseUp={resume}
-      onMouseLeave={resume}
+      onMouseUp={resumeSoon}
+      onWheel={pause}
     >
-      <div
-        className="flex gap-4"
-        style={{
-          transform: `translateX(-${targetIndex * STEP}px)`,
-          transition: instantJump ? "none" : "transform 0.4s ease",
-        }}
-      >
-        {extended.map((cat, i) => {
-          const count = products.filter((p) => productCats(p).includes(cat.name)).length;
-          const isActive = i === restingIndex;
-          return (
-            <button
-              key={cat.name + i}
-              onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
-              className="flex flex-col items-center gap-1.5 flex-shrink-0"
-              style={{ width: CARD_WIDTH }}
+      <style>{`.cat-strip::-webkit-scrollbar { display: none; }`}</style>
+      {categories.map((cat) => {
+        const count = products.filter((p) => productCats(p).includes(cat.name)).length;
+        return (
+          <button
+            key={cat.name}
+            onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
+            className="flex flex-col items-center gap-1.5 flex-shrink-0"
+            style={{ width: CARD_WIDTH }}
+          >
+            <div
+              className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
+              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft, border: "2px solid transparent" }}
             >
-              <div
-                className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
-                style={{
-                  background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft,
-                  border: isActive ? "2px solid #E53935" : "2px solid transparent",
-                  transition: instantJump ? "none" : "border-color 0.3s ease",
-                }}
-              >
-                {cat.image ? (
-                  <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
-                ) : (
-                  cat.icon || "🛍️"
-                )}
-              </div>
-              <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
-                {cat.name}
-              </span>
-              <span className="text-[10px]" style={{ color: PALETTE.muted }}>
-                ({count})
-              </span>
-            </button>
-          );
-        })}
-      </div>
+              {cat.image ? (
+                <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
+              ) : (
+                cat.icon || "🛍️"
+              )}
+            </div>
+            <span className="text-[11px] text-center leading-tight" style={{ color: PALETTE.ink }}>
+              {cat.name}
+            </span>
+            <span className="text-[10px]" style={{ color: PALETTE.muted }}>
+              ({count})
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -938,12 +901,12 @@ function SearchView({ products, navigate, onAdd }) {
   );
 }
 
-function HomeView({ products, banners, bannerStyle, categories, navigate, onAdd, copyLink }) {
+function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categories, navigate, onAdd, copyLink }) {
   return (
     <>
       <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} styleType={bannerStyle} />
 
-      <InfiniteCategoryStrip products={products} categories={categories} navigate={navigate} />
+      <InfiniteCategoryStrip products={products} categories={categories} navigate={navigate} autoSlide={categoryAutoSlide} />
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {categories.map((cat) => {
@@ -1546,7 +1509,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -2147,6 +2110,22 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
 
       {tab === "categories" && (
         <div>
+          <div className="rounded-2xl p-4 mb-5 flex items-center justify-between" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <div>
+              <p className="text-sm font-semibold">ক্যাটাগরি স্ট্রিপ অটো-স্লাইড</p>
+              <p className="text-xs" style={{ color: PALETTE.muted }}>বন্ধ করলে ইউজারকে নিজে হাত দিয়ে টেনে দেখতে হবে</p>
+            </div>
+            <button
+              onClick={() => saveCategoryAutoSlide(!categoryAutoSlide)}
+              className="w-12 h-7 rounded-full relative flex-shrink-0"
+              style={{ background: categoryAutoSlide ? PALETTE.blue : "#D1D5DB" }}
+            >
+              <span
+                className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all"
+                style={{ left: categoryAutoSlide ? "22px" : "2px" }}
+              />
+            </button>
+          </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
             <h3 className="font-semibold mb-3">{catEditing ? "ক্যাটাগরি এডিট করুন" : "নতুন ক্যাটাগরি যোগ করুন"}</h3>
             <div className="grid grid-cols-2 gap-3">
