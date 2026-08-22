@@ -1731,7 +1731,7 @@ function AdminView({ products, orders, banners, categories, promoPopup, setPromo
     };
     let next;
     if (editing) next = products.map((p) => (p.id === editing ? payload : p));
-    else next = [...products, payload];
+    else next = [payload, ...products];
     await saveProducts(next);
     resetForm();
   };
