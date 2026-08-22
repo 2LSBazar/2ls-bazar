@@ -795,25 +795,39 @@ function InfiniteCategoryStrip({ products, categories, navigate }) {
 
 function BannerCarousel({ banners, styleType = "fade" }) {
   const [idx, setIdx] = useState(0);
+  const [cycle, setCycle] = useState(0); // bumped every rotation to force the entrance animation to replay
   useEffect(() => {
     setIdx(0);
+    setCycle((c) => c + 1);
   }, [banners]);
   useEffect(() => {
     if (banners.length <= 1) return;
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % banners.length);
+      setCycle((c) => c + 1);
     }, 4000);
     return () => clearInterval(t);
   }, [banners.length]);
 
   if (styleType === "slide") {
+    // The previous banner stays put underneath; the new one slides in from
+    // the right and covers it completely. Next rotation, today's "new" banner
+    // becomes the static bottom layer and another one slides in over it —
+    // so it repeats the exact same motion forever with no visible reset point.
+    const prevIdx = (idx - 1 + banners.length) % banners.length;
     return (
       <section className="relative overflow-hidden" style={{ aspectRatio: "1280/533" }}>
-        <div className="w-full h-full flex" style={{ transform: `translateX(-${idx * 100}%)`, transition: "transform 0.7s ease-in-out" }}>
-          {banners.map((src, i) => (
-            <img key={i} src={src} alt="2LS Bazar Banner" className="w-full h-full object-cover flex-shrink-0" />
-          ))}
-        </div>
+        <style>{`
+          @keyframes bannerSlideCover {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0%); }
+          }
+          .banner-slide-cover {
+            animation: bannerSlideCover 0.8s ease-in-out forwards;
+          }
+        `}</style>
+        <img src={banners[prevIdx]} alt="2LS Bazar Banner" className="w-full h-full object-cover absolute inset-0" style={{ zIndex: 1 }} />
+        <img key={cycle} src={banners[idx]} alt="2LS Bazar Banner" className="w-full h-full object-cover absolute inset-0 banner-slide-cover" style={{ zIndex: 2 }} />
       </section>
     );
   }
