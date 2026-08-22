@@ -1391,27 +1391,34 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
 }
 
 function DoneView({ navigate, orders, orderId }) {
-  const order = (orderId && orders.find((o) => o.id === orderId)) || orders[0];
+  const order = orderId ? orders.find((o) => o.id === orderId) : null;
+
+  // If there's no matching order (e.g. someone lands on this page without
+  // just having placed an order — a stale/shared link, a bookmark, etc.),
+  // don't show a "thank you" screen with a random order's details.
+  // Just send them to the home page instead.
+  useEffect(() => {
+    if (!order) navigate("#/");
+  }, [order]);
+
+  if (!order) return null;
+
   return (
     <section className="max-w-md mx-auto px-4 py-20 text-center">
       <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: PALETTE.orange }}>
         <Check size={28} color="#fff" />
       </div>
-      <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-2xl font-bold mb-2">ধন্যবাদ{order ? `, ${order.name}` : ""}!</h2>
-      {order && (
-        <>
-          <p className="text-sm mb-1" style={{ color: PALETTE.muted }}>আপনার অর্ডার আইডি</p>
-          <p className="font-bold text-lg mb-6" style={{ color: PALETTE.blue }}>{order.id}</p>
-          <p className="text-sm mb-6" style={{ color: PALETTE.muted }}>
-            {order.paymentMethod === "bkash"
-              ? "আমরা আপনার বিকাশ পেমেন্ট যাচাই করে শীঘ্রই ফোন করে নিশ্চিত করবো।"
-              : `আমরা শীঘ্রই ${order.phone} নম্বরে ফোন করে নিশ্চিত করবো।`}
-          </p>
-          <button onClick={() => navigate(`#/track/${order.id}`)} className="px-6 py-2.5 rounded-full font-semibold mb-3 block mx-auto" style={{ background: PALETTE.blue, color: "#fff" }}>
-            অর্ডার ট্র্যাক করুন
-          </button>
-        </>
-      )}
+      <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-2xl font-bold mb-2">ধন্যবাদ, {order.name}!</h2>
+      <p className="text-sm mb-1" style={{ color: PALETTE.muted }}>আপনার অর্ডার আইডি</p>
+      <p className="font-bold text-lg mb-6" style={{ color: PALETTE.blue }}>{order.id}</p>
+      <p className="text-sm mb-6" style={{ color: PALETTE.muted }}>
+        {order.paymentMethod === "bkash"
+          ? "আমরা আপনার বিকাশ পেমেন্ট যাচাই করে শীঘ্রই ফোন করে নিশ্চিত করবো।"
+          : `আমরা শীঘ্রই ${order.phone} নম্বরে ফোন করে নিশ্চিত করবো।`}
+      </p>
+      <button onClick={() => navigate(`#/track/${order.id}`)} className="px-6 py-2.5 rounded-full font-semibold mb-3 block mx-auto" style={{ background: PALETTE.blue, color: "#fff" }}>
+        অর্ডার ট্র্যাক করুন
+      </button>
       <button onClick={() => navigate("#/")} className="px-6 py-2.5 rounded-full font-semibold" style={{ background: PALETTE.blue, color: "#fff" }}>
         আরও কেনাকাটা করুন
       </button>
