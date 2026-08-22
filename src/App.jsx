@@ -735,7 +735,7 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
           >
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
-              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft, border: "2px solid transparent" }}
+              style={{ background: cat.color ? `${cat.color}33` : PALETTE.orangeSoft, border: `2px solid ${PALETTE.border}` }}
             >
               {cat.image ? (
                 <img src={cat.image} alt={cat.name} className="w-full h-full object-cover" />
