@@ -675,27 +675,34 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
   const scrollRef = useRef(null);
   const pausedRef = useRef(false);
   const resumeTimerRef = useRef(null);
-  const CARD_WIDTH = 76;
-  const GAP = 16;
-  const STEP = CARD_WIDTH + GAP;
+  const rafRef = useRef(null);
+  const SPEED_PX_PER_SEC = 45;
 
-  // Auto-slide gently nudges the strip forward every few seconds, but the
-  // user can freely drag/scroll it by hand at any time — dragging pauses
-  // auto-slide for a moment so it never fights the user's finger.
+  // Render the category list twice back-to-back so the loop can be seamless:
+  // once the strip has scrolled exactly one full set's width, we snap the
+  // scroll position back by that width — since the content repeats
+  // identically, the snap is invisible and it looks like it never stops.
+  const loopCats = categories.length > 1 ? [...categories, ...categories] : categories;
+
   useEffect(() => {
     if (!autoSlide || categories.length < 2) return;
-    const timer = setInterval(() => {
+    let last = performance.now();
+    const tick = (now) => {
       const el = scrollRef.current;
-      if (!el || pausedRef.current) return;
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      if (maxScroll <= 0) return;
-      if (el.scrollLeft >= maxScroll - 4) {
-        el.scrollTo({ left: 0, behavior: "smooth" });
-      } else {
-        el.scrollTo({ left: el.scrollLeft + STEP, behavior: "smooth" });
+      if (el && !pausedRef.current) {
+        const dt = (now - last) / 1000;
+        const singleWidth = el.scrollWidth / 2;
+        if (singleWidth > 0) {
+          let next = el.scrollLeft + SPEED_PX_PER_SEC * dt;
+          if (next >= singleWidth) next -= singleWidth;
+          el.scrollLeft = next;
+        }
       }
-    }, 3000);
-    return () => clearInterval(timer);
+      last = now;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [autoSlide, categories.length]);
 
   const pause = () => {
@@ -704,7 +711,16 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
   };
   const resumeSoon = () => {
     if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
-    resumeTimerRef.current = setTimeout(() => { pausedRef.current = false; }, 1500);
+    resumeTimerRef.current = setTimeout(() => {
+      // fold the scroll position back into the first copy's range so
+      // dragging around doesn't run past the duplicated content
+      const el = scrollRef.current;
+      if (el) {
+        const singleWidth = el.scrollWidth / 2;
+        if (singleWidth > 0) el.scrollLeft = el.scrollLeft % singleWidth;
+      }
+      pausedRef.current = false;
+    }, 1500);
   };
 
   return (
@@ -724,14 +740,14 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
       onWheel={pause}
     >
       <style>{`.cat-strip::-webkit-scrollbar { display: none; }`}</style>
-      {categories.map((cat) => {
+      {loopCats.map((cat, i) => {
         const count = products.filter((p) => productCats(p).includes(cat.name)).length;
         return (
           <button
-            key={cat.name}
+            key={cat.name + "_" + i}
             onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
             className="flex flex-col items-center gap-1.5 flex-shrink-0"
-            style={{ width: CARD_WIDTH }}
+            style={{ width: 76 }}
           >
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
@@ -1222,6 +1238,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
 function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
   const [form, setForm] = useState({ name: "", phone: "", address: "", area: "dhaka", paymentMethod: "cod", trxId: "" });
   const [errors, setErrors] = useState({});
+  const [agreed, setAgreed] = useState(false);
   const deliveryCharge = form.area === "dhaka" ? 90 : 130;
   const total = subtotal + deliveryCharge;
 
@@ -1243,6 +1260,7 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
     if (!form.address.trim()) errs.address = "ঠিকানা লিখুন";
     if (form.paymentMethod === "bkash" && !form.trxId.trim()) errs.trxId = "পেমেন্টের পর পাওয়া ট্রানজেকশন আইডি লিখুন";
     if (form.paymentMethod === "cod" && !codAllowed) errs.paymentMethod = "এই প্রোডাক্টের জন্য ক্যাশ অন ডেলিভারি নেই, বিকাশে পেমেন্ট করো";
+    if (!agreed) errs.agreed = "শর্তাবলীতে সম্মতি জানাতে টিক চিহ্ন দিন";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     const orderId = "2LS" + Math.floor(100000 + Math.random() * 900000);
@@ -1381,7 +1399,28 @@ function CheckoutView({ cartItems, subtotal, navigate, onOrder }) {
           </div>
         </div>
 
-        <button onClick={submit} className="w-full py-3 rounded-full font-semibold" style={{ background: PALETTE.orange, color: "#fff" }}>
+        <div className="rounded-xl p-4" style={{ background: errors.agreed ? "#FDECEC" : "#F1F5F9", border: `1px solid ${errors.agreed ? "#F0A8A8" : PALETTE.border}` }}>
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => { setAgreed(e.target.checked); if (e.target.checked) setErrors((er) => ({ ...er, agreed: undefined })); }}
+              className="mt-1 w-4 h-4 flex-shrink-0"
+            />
+            <span className="text-xs" style={{ color: PALETTE.ink }}>
+              কোন প্রকার কোন কারণ ছাড়া অর্ডারটি রিসিভ না করলে ডেলিভারি চার্জ আমাকে বহন করতে হবে, নাহলে আখেরাতে ঠেকে থাকবো।
+              <br />✅ আমি সম্মত জানাচ্ছি
+            </span>
+          </label>
+          {errors.agreed && <p className="text-xs mt-1" style={{ color: PALETTE.orange }}>{errors.agreed}</p>}
+        </div>
+
+        <button
+          onClick={submit}
+          disabled={!agreed}
+          className="w-full py-3 rounded-full font-semibold"
+          style={agreed ? { background: PALETTE.orange, color: "#fff" } : { background: "#D1D5DB", color: "#6B7280", cursor: "not-allowed" }}
+        >
           অর্ডার কনফার্ম করুন
         </button>
       </div>
