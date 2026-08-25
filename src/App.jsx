@@ -188,7 +188,7 @@ function useHashRoute() {
   return [hash, navigate];
 }
 
-function ProductCard({ p, onOpen, onAdd }) {
+function ProductCard({ p, onOpen, onAdd, btnColor }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
   const discountPct = hasDiscount ? Math.round(((p.price - p.discount) / p.price) * 100) : 0;
   const firstColorImg = p.colorImages && Object.values(p.colorImages)[0];
@@ -230,9 +230,9 @@ function ProductCard({ p, onOpen, onAdd }) {
           onClick={() => !outOfStock && onAdd(p)}
           disabled={outOfStock}
           className="mt-2 w-full text-xs font-semibold px-3 py-1.5 rounded-full"
-          style={outOfStock ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.blue, color: "#fff" }}
+          style={outOfStock ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: btnColor || PALETTE.blue, color: "#fff" }}
         >
-          {outOfStock ? "স্টক নেই" : "কার্টে দিন"}
+          {outOfStock ? "OUT OF STOCK" : "Add to cart"}
         </button>
       </div>
     </div>
@@ -278,6 +278,8 @@ export default function App() {
   const [bannerStyle, setBannerStyle] = useState("fade");
   const [categoryAutoSlide, setCategoryAutoSlide] = useState(true);
   const [orderBtnColor, setOrderBtnColor] = useState("#DC2626");
+  const [homeAddCartColor, setHomeAddCartColor] = useState("#144C86");
+  const [productAddCartColor, setProductAddCartColor] = useState("#DC2626");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -354,6 +356,14 @@ export default function App() {
         if (obres && obres.value) setOrderBtnColor(obres.value);
       } catch (e) {}
       try {
+        const hacres = await window.storage.get("homeAddCartColor", true);
+        if (hacres && hacres.value) setHomeAddCartColor(hacres.value);
+      } catch (e) {}
+      try {
+        const pacres = await window.storage.get("productAddCartColor", true);
+        if (pacres && pacres.value) setProductAddCartColor(pacres.value);
+      } catch (e) {}
+      try {
         const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
@@ -403,6 +413,14 @@ export default function App() {
   const saveOrderBtnColor = async (next) => {
     setOrderBtnColor(next);
     try { await window.storage.set("orderBtnColor", next, true); } catch (e) {}
+  };
+  const saveHomeAddCartColor = async (next) => {
+    setHomeAddCartColor(next);
+    try { await window.storage.set("homeAddCartColor", next, true); } catch (e) {}
+  };
+  const saveProductAddCartColor = async (next) => {
+    setProductAddCartColor(next);
+    try { await window.storage.set("productAddCartColor", next, true); } catch (e) {}
   };
   const saveCategories = async (next) => {
     setCategories(next);
@@ -544,17 +562,18 @@ export default function App() {
             categories={categories}
             navigate={navigate}
             onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])}
+            homeAddCartColor={homeAddCartColor}
             copyLink={copyLink}
           />
         </>
       )}
 
       {view === "category" && (
-        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} copyLink={copyLink} />
+        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} copyLink={copyLink} />
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} copyLink={copyLink} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} copyLink={copyLink} />
       )}
 
       {view === "checkout" && (
@@ -573,7 +592,7 @@ export default function App() {
       {view === "done" && <DoneView navigate={navigate} orders={orders} orderId={param} />}
 
       {view === "search" && (
-        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} />
+        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} />
       )}
 
       {view === "track" && (
@@ -581,7 +600,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} orderBtnColor={orderBtnColor} saveOrderBtnColor={saveOrderBtnColor} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} orderBtnColor={orderBtnColor} saveOrderBtnColor={saveOrderBtnColor} homeAddCartColor={homeAddCartColor} saveHomeAddCartColor={saveHomeAddCartColor} productAddCartColor={productAddCartColor} saveProductAddCartColor={saveProductAddCartColor} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -800,18 +819,59 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
 function BannerCarousel({ banners, styleType = "fade" }) {
   const [idx, setIdx] = useState(0);
   const [cycle, setCycle] = useState(0); // bumped every rotation to force the entrance animation to replay
+  const marqueeRef = useRef(null);
+  const rafRef = useRef(null);
   useEffect(() => {
     setIdx(0);
     setCycle((c) => c + 1);
   }, [banners]);
   useEffect(() => {
-    if (banners.length <= 1) return;
+    if (banners.length <= 1 || styleType === "marquee") return;
     const t = setInterval(() => {
       setIdx((i) => (i + 1) % banners.length);
       setCycle((c) => c + 1);
     }, 4000);
     return () => clearInterval(t);
-  }, [banners.length]);
+  }, [banners.length, styleType]);
+
+  // Continuous right-to-left scroll (like a marquee) — banners are duplicated
+  // back-to-back and constantly translated left; once one full set's width
+  // has scrolled by, we snap back by that width with no visible jump since
+  // the content repeats identically.
+  useEffect(() => {
+    if (styleType !== "marquee" || banners.length < 2) return;
+    let last = performance.now();
+    const SPEED = 40; // px/sec
+    const tick = (now) => {
+      const el = marqueeRef.current;
+      if (el) {
+        const dt = (now - last) / 1000;
+        const singleWidth = el.scrollWidth / 2;
+        if (singleWidth > 0) {
+          let next = el.scrollLeft + SPEED * dt;
+          if (next >= singleWidth) next -= singleWidth;
+          el.scrollLeft = next;
+        }
+      }
+      last = now;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [styleType, banners.length]);
+
+  if (styleType === "marquee" && banners.length > 1) {
+    const loopBanners = [...banners, ...banners];
+    return (
+      <section className="relative overflow-hidden" style={{ aspectRatio: "1280/533" }}>
+        <div ref={marqueeRef} className="w-full h-full flex" style={{ overflowX: "hidden" }}>
+          {loopBanners.map((src, i) => (
+            <img key={i} src={src} alt="2LS Bazar Banner" className="w-full h-full object-cover flex-shrink-0" />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   if (styleType === "slide") {
     // The previous banner stays put underneath; the new one slides in from
@@ -863,7 +923,7 @@ function BannerCarousel({ banners, styleType = "fade" }) {
   );
 }
 
-function SearchView({ products, navigate, onAdd }) {
+function SearchView({ products, navigate, onAdd, homeAddCartColor }) {
   const [query, setQuery] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -933,7 +993,7 @@ function SearchView({ products, navigate, onAdd }) {
           <p className="text-xs mb-3" style={{ color: PALETTE.muted }}>{results.length}টা প্রোডাক্ট পাওয়া গেছে</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {results.map((p) => (
-              <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} />
+              <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
             ))}
           </div>
         </>
@@ -942,7 +1002,7 @@ function SearchView({ products, navigate, onAdd }) {
   );
 }
 
-function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categories, navigate, onAdd, copyLink }) {
+function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categories, navigate, onAdd, homeAddCartColor, copyLink }) {
   return (
     <>
       <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} styleType={bannerStyle} />
@@ -983,7 +1043,7 @@ function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categorie
               )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {items.map((p) => (
-                  <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} />
+                  <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
                 ))}
               </div>
             </div>
@@ -994,7 +1054,7 @@ function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categorie
   );
 }
 
-function CategoryView({ category, products, navigate, onAdd, copyLink }) {
+function CategoryView({ category, products, navigate, onAdd, homeAddCartColor, copyLink }) {
   const items = products.filter((p) => productCats(p).includes(category));
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -1012,7 +1072,7 @@ function CategoryView({ category, products, navigate, onAdd, copyLink }) {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {items.map((p) => (
-            <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} />
+            <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
           ))}
         </div>
       )}
@@ -1099,7 +1159,7 @@ function ImageCarousel({ images, title, jumpTo }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, copyLink }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, copyLink }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
@@ -1207,7 +1267,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           }}
           disabled={p.inStock === false}
           className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: "#DC2626", border: "2px solid #DC2626" }}
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: productAddCartColor || "#DC2626", border: `2px solid ${productAddCartColor || "#DC2626"}` }}
         >
           {p.inStock === false ? "OUT OF STOCK" : "Add To Cart"}
         </button>
@@ -1273,7 +1333,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           </h3>
           <div className="grid grid-cols-2 gap-4">
             {relatedProducts.map((rp) => (
-              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes && pp.sizes[0], pp.colors && pp.colors[0])} />
+              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes && pp.sizes[0], pp.colors && pp.colors[0])} btnColor={homeAddCartColor} />
             ))}
           </div>
         </div>
@@ -1573,7 +1633,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, orderBtnColor, saveOrderBtnColor, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, orderBtnColor, saveOrderBtnColor, homeAddCartColor, saveHomeAddCartColor, productAddCartColor, saveProductAddCartColor, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -2130,8 +2190,9 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
             <div className="flex flex-wrap gap-2">
               {[
                 { v: "fade", label: "ফেড (নরমাল)" },
-                { v: "slide", label: "স্লাইড" },
+                { v: "slide", label: "স্লাইড (কভার)" },
                 { v: "zoom", label: "জুম" },
+                { v: "marquee", label: "ধারাবাহিক স্লাইড (ডান→বাম)" },
               ].map((opt) => (
                 <button
                   key={opt.v}
@@ -2157,6 +2218,34 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
               />
               <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{orderBtnColor || "#DC2626"}</span>
               <button type="button" onClick={() => saveOrderBtnColor("#DC2626")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
+            </div>
+          </div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>হোমপেজ "Add to cart" বাটনের রঙ</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={homeAddCartColor || "#144C86"}
+                onChange={(e) => saveHomeAddCartColor(e.target.value)}
+                className="w-14 h-10 rounded border"
+                style={{ borderColor: PALETTE.border }}
+              />
+              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{homeAddCartColor || "#144C86"}</span>
+              <button type="button" onClick={() => saveHomeAddCartColor("#144C86")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
+            </div>
+          </div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>প্রোডাক্ট পেজের "Add To Cart" বাটনের রঙ</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={productAddCartColor || "#DC2626"}
+                onChange={(e) => saveProductAddCartColor(e.target.value)}
+                className="w-14 h-10 rounded border"
+                style={{ borderColor: PALETTE.border }}
+              />
+              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{productAddCartColor || "#DC2626"}</span>
+              <button type="button" onClick={() => saveProductAddCartColor("#DC2626")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
             </div>
           </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
