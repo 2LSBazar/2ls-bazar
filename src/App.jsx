@@ -1224,26 +1224,30 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
         )}
       </div>
 
-      <div className="mt-5">
-        <p className="text-sm font-semibold mb-1">সাইজ</p>
-        <div className="flex gap-2 flex-wrap">
-          {p.sizes.map((s) => (
-            <button key={s} onClick={() => { setSize(s); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
-              {s}
-            </button>
-          ))}
+      {p.sizes && p.sizes.length > 0 && (
+        <div className="mt-5">
+          <p className="text-sm font-semibold mb-1">সাইজ</p>
+          <div className="flex gap-2 flex-wrap">
+            {p.sizes.map((s) => (
+              <button key={s} onClick={() => { setSize(s); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-      <div className="mt-3">
-        <p className="text-sm font-semibold mb-1">কালার</p>
-        <div className="flex gap-2 flex-wrap">
-          {p.colors.map((c) => (
-            <button key={c} onClick={() => { setColor(c); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
-              {c}
-            </button>
-          ))}
+      )}
+      {p.colors && p.colors.length > 0 && (
+        <div className="mt-3">
+          <p className="text-sm font-semibold mb-1">কালার</p>
+          <div className="flex gap-2 flex-wrap">
+            {p.colors.map((c) => (
+              <button key={c} onClick={() => { setColor(c); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {selectionError && (
         <p className="text-xs mb-2 font-semibold" style={{ color: "#E2136E" }}>
