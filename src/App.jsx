@@ -1165,6 +1165,15 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
   const [color, setColor] = useState(null);
   const [selectionError, setSelectionError] = useState("");
   const [qty, setQty] = useState(1);
+
+  // Pre-select the first size/color by default so customers don't have to
+  // click before they can order — resets whenever they open a different product.
+  useEffect(() => {
+    setSize(p && p.sizes && p.sizes.length > 0 ? p.sizes[0] : null);
+    setColor(p && p.colors && p.colors.length > 0 ? p.colors[0] : null);
+    setQty(1);
+    setSelectionError("");
+  }, [productId]);
   if (!p) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
