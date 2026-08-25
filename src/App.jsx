@@ -277,6 +277,7 @@ export default function App() {
   const [banners, setBanners] = useState([BANNER]);
   const [bannerStyle, setBannerStyle] = useState("fade");
   const [categoryAutoSlide, setCategoryAutoSlide] = useState(true);
+  const [orderBtnColor, setOrderBtnColor] = useState("#DC2626");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -349,6 +350,10 @@ export default function App() {
         if (casres && casres.value) setCategoryAutoSlide(casres.value !== "off");
       } catch (e) {}
       try {
+        const obres = await window.storage.get("orderBtnColor", true);
+        if (obres && obres.value) setOrderBtnColor(obres.value);
+      } catch (e) {}
+      try {
         const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
@@ -395,6 +400,10 @@ export default function App() {
     setCategoryAutoSlide(next);
     try { await window.storage.set("categoryAutoSlide", next ? "on" : "off", true); } catch (e) {}
   };
+  const saveOrderBtnColor = async (next) => {
+    setOrderBtnColor(next);
+    try { await window.storage.set("orderBtnColor", next, true); } catch (e) {}
+  };
   const saveCategories = async (next) => {
     setCategories(next);
     try { await window.storage.set("categories", JSON.stringify(next), true); } catch (e) {}
@@ -410,10 +419,12 @@ export default function App() {
       showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
       return;
     }
-    const key = `${p.id}|${size || p.sizes[0]}|${color || p.colors[0]}`;
+    const finalSize = size || (p.sizes && p.sizes[0]) || "";
+    const finalColor = color || (p.colors && p.colors[0]) || "";
+    const key = `${p.id}|${finalSize}|${finalColor}`;
     setCart((c) => ({
       ...c,
-      [key]: { ...(c[key] || { id: p.id, size: size || p.sizes[0], color: color || p.colors[0], qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
+      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
     }));
     showToast("কার্টে যোগ হয়েছে");
   };
@@ -422,10 +433,12 @@ export default function App() {
       showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
       return;
     }
-    const key = `${p.id}|${size || p.sizes[0]}|${color || p.colors[0]}`;
+    const finalSize = size || (p.sizes && p.sizes[0]) || "";
+    const finalColor = color || (p.colors && p.colors[0]) || "";
+    const key = `${p.id}|${finalSize}|${finalColor}`;
     setCart((c) => ({
       ...c,
-      [key]: { ...(c[key] || { id: p.id, size: size || p.sizes[0], color: color || p.colors[0], qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
+      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
     }));
     navigate("#/checkout");
   };
@@ -530,18 +543,18 @@ export default function App() {
             categoryAutoSlide={categoryAutoSlide}
             categories={categories}
             navigate={navigate}
-            onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])}
+            onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])}
             copyLink={copyLink}
           />
         </>
       )}
 
       {view === "category" && (
-        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])} copyLink={copyLink} />
+        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} copyLink={copyLink} />
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} copyLink={copyLink} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} copyLink={copyLink} />
       )}
 
       {view === "checkout" && (
@@ -560,7 +573,7 @@ export default function App() {
       {view === "done" && <DoneView navigate={navigate} orders={orders} orderId={param} />}
 
       {view === "search" && (
-        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes[0], p.colors[0])} />
+        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} />
       )}
 
       {view === "track" && (
@@ -568,7 +581,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} orderBtnColor={orderBtnColor} saveOrderBtnColor={saveOrderBtnColor} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -1086,7 +1099,7 @@ function ImageCarousel({ images, title, jumpTo }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, copyLink }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, copyLink }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
@@ -1171,27 +1184,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
         </div>
       </div>
 
-      <div className="flex gap-2 mt-5">
-        <button
-          onClick={() => {
-            if (p.inStock === false) return;
-            if (p.sizes && p.sizes.length > 0 && !size) {
-              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
-              return;
-            }
-            if (p.colors && p.colors.length > 0 && !color) {
-              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
-              return;
-            }
-            setSelectionError("");
-            onAdd(p, size, color);
-          }}
-          disabled={p.inStock === false}
-          className="flex-1 py-3 rounded-full font-semibold text-sm"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: PALETTE.orange, border: `2px solid ${PALETTE.orange}` }}
-        >
-          {p.inStock === false ? "স্টক নেই" : "কার্টে দিন"}
-        </button>
+      <div className="flex flex-col gap-2.5 mt-5">
         <button
           onClick={() => {
             if (p.inStock === false) return;
@@ -1207,13 +1200,33 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
             onBuyNow(p, size, color);
           }}
           disabled={p.inStock === false}
-          className="flex-1 py-3 rounded-full font-semibold text-sm"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.orange, color: "#fff" }}
+          className="w-full py-3.5 rounded-full font-bold text-base tracking-wide"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#DC2626", color: "#fff" }}
         >
-          {p.inStock === false ? "স্টক নেই" : "এখনই অর্ডার করুন"}
+          {p.inStock === false ? "OUT OF STOCK" : "Order Now"}
         </button>
-        <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
-          <Share2 size={18} color={PALETTE.blue} />
+        <button
+          onClick={() => {
+            if (p.inStock === false) return;
+            if (p.sizes && p.sizes.length > 0 && !size) {
+              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
+              return;
+            }
+            if (p.colors && p.colors.length > 0 && !color) {
+              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
+              return;
+            }
+            setSelectionError("");
+            onAdd(p, size, color);
+          }}
+          disabled={p.inStock === false}
+          className="w-full py-3.5 rounded-full font-bold text-base tracking-wide"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: "#DC2626", border: "2px solid #DC2626" }}
+        >
+          {p.inStock === false ? "OUT OF STOCK" : "Add To Cart"}
+        </button>
+        <button onClick={() => copyLink(`#/product/${p.id}`)} className="w-full py-2 rounded-full border flex items-center justify-center gap-2 text-sm font-medium" style={{ borderColor: PALETTE.border, color: PALETTE.blue }}>
+          <Share2 size={16} /> লিংক শেয়ার করুন
         </button>
       </div>
       {selectionError && (
@@ -1257,7 +1270,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           </h3>
           <div className="grid grid-cols-2 gap-4">
             {relatedProducts.map((rp) => (
-              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes[0], pp.colors[0])} />
+              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes && pp.sizes[0], pp.colors && pp.colors[0])} />
             ))}
           </div>
         </div>
@@ -1557,7 +1570,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, orderBtnColor, saveOrderBtnColor, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -1741,8 +1754,8 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
         if (!proceed) return;
       }
     }
-    const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : ["ডিফল্ট"];
-    const sizes = form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : ["ফ্রি সাইজ"];
+    const colors = form.colors ? form.colors.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const sizes = form.sizes ? form.sizes.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const generalImages = form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [];
     // Color-specific images and general/gallery images are kept separate now,
     // instead of colorImages silently replacing generalImages when every
@@ -2127,6 +2140,20 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>"Order Now" বাটনের রঙ</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={orderBtnColor || "#DC2626"}
+                onChange={(e) => saveOrderBtnColor(e.target.value)}
+                className="w-14 h-10 rounded border"
+                style={{ borderColor: PALETTE.border }}
+              />
+              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{orderBtnColor || "#DC2626"}</span>
+              <button type="button" onClick={() => saveOrderBtnColor("#DC2626")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
             </div>
           </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
