@@ -414,7 +414,7 @@ export default function App() {
     setTimeout(() => setToast(""), 2000);
   };
 
-  const addToCart = (p, size, color) => {
+  const addToCart = (p, size, color, qty = 1) => {
     if (p.inStock === false) {
       showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
       return;
@@ -424,11 +424,11 @@ export default function App() {
     const key = `${p.id}|${finalSize}|${finalColor}`;
     setCart((c) => ({
       ...c,
-      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
+      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + qty },
     }));
     showToast("কার্টে যোগ হয়েছে");
   };
-  const buyNow = (p, size, color) => {
+  const buyNow = (p, size, color, qty = 1) => {
     if (p.inStock === false) {
       showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
       return;
@@ -438,7 +438,7 @@ export default function App() {
     const key = `${p.id}|${finalSize}|${finalColor}`;
     setCart((c) => ({
       ...c,
-      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
+      [key]: { ...(c[key] || { id: p.id, size: finalSize, color: finalColor, qty: 0 }), qty: (c[key]?.qty || 0) + qty },
     }));
     navigate("#/checkout");
   };
@@ -1104,6 +1104,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
   const [selectionError, setSelectionError] = useState("");
+  const [qty, setQty] = useState(1);
   if (!p) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
@@ -1184,7 +1185,12 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
         </div>
       </div>
 
-      <div className="flex flex-col gap-2.5 mt-5">
+      <div className="flex items-center gap-2 mt-5">
+        <div className="flex items-center rounded-full border overflow-hidden flex-shrink-0" style={{ borderColor: PALETTE.border }}>
+          <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-11 flex items-center justify-center text-lg font-bold" style={{ color: PALETTE.ink }}>−</button>
+          <span className="w-8 text-center font-semibold text-sm">{qty}</span>
+          <button onClick={() => setQty((q) => q + 1)} className="w-9 h-11 flex items-center justify-center text-lg font-bold" style={{ color: PALETTE.ink }}>+</button>
+        </div>
         <button
           onClick={() => {
             if (p.inStock === false) return;
@@ -1197,36 +1203,33 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
               return;
             }
             setSelectionError("");
-            onBuyNow(p, size, color);
+            onAdd(p, size, color, qty);
           }}
           disabled={p.inStock === false}
-          className="w-full py-3.5 rounded-full font-bold text-base tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#DC2626", color: "#fff" }}
-        >
-          {p.inStock === false ? "OUT OF STOCK" : "Order Now"}
-        </button>
-        <button
-          onClick={() => {
-            if (p.inStock === false) return;
-            if (p.sizes && p.sizes.length > 0 && !size) {
-              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
-              return;
-            }
-            if (p.colors && p.colors.length > 0 && !color) {
-              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
-              return;
-            }
-            setSelectionError("");
-            onAdd(p, size, color);
-          }}
-          disabled={p.inStock === false}
-          className="w-full py-3.5 rounded-full font-bold text-base tracking-wide"
+          className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
           style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: "#DC2626", border: "2px solid #DC2626" }}
         >
           {p.inStock === false ? "OUT OF STOCK" : "Add To Cart"}
         </button>
-        <button onClick={() => copyLink(`#/product/${p.id}`)} className="w-full py-2 rounded-full border flex items-center justify-center gap-2 text-sm font-medium" style={{ borderColor: PALETTE.border, color: PALETTE.blue }}>
-          <Share2 size={16} /> লিংক শেয়ার করুন
+        <button
+          onClick={() => {
+            if (p.inStock === false) return;
+            if (p.sizes && p.sizes.length > 0 && !size) {
+              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
+              return;
+            }
+            if (p.colors && p.colors.length > 0 && !color) {
+              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
+              return;
+            }
+            setSelectionError("");
+            onBuyNow(p, size, color, qty);
+          }}
+          disabled={p.inStock === false}
+          className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#DC2626", color: "#fff" }}
+        >
+          {p.inStock === false ? "OUT OF STOCK" : "Order Now"}
         </button>
       </div>
       {selectionError && (
