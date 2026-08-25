@@ -417,6 +417,18 @@ export default function App() {
     }));
     showToast("কার্টে যোগ হয়েছে");
   };
+  const buyNow = (p, size, color) => {
+    if (p.inStock === false) {
+      showToast("এই প্রোডাক্টটি এখন স্টকে নেই");
+      return;
+    }
+    const key = `${p.id}|${size || p.sizes[0]}|${color || p.colors[0]}`;
+    setCart((c) => ({
+      ...c,
+      [key]: { ...(c[key] || { id: p.id, size: size || p.sizes[0], color: color || p.colors[0], qty: 0 }), qty: (c[key]?.qty || 0) + 1 },
+    }));
+    navigate("#/checkout");
+  };
   const changeQty = (key, delta) => {
     setCart((c) => {
       const next = { ...c };
@@ -529,7 +541,7 @@ export default function App() {
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} copyLink={copyLink} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} copyLink={copyLink} />
       )}
 
       {view === "checkout" && (
@@ -675,27 +687,34 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
   const scrollRef = useRef(null);
   const pausedRef = useRef(false);
   const resumeTimerRef = useRef(null);
-  const CARD_WIDTH = 76;
-  const GAP = 16;
-  const STEP = CARD_WIDTH + GAP;
+  const rafRef = useRef(null);
+  const SPEED_PX_PER_SEC = 45;
 
-  // Auto-slide gently nudges the strip forward every few seconds, but the
-  // user can freely drag/scroll it by hand at any time — dragging pauses
-  // auto-slide for a moment so it never fights the user's finger.
+  // Render the category list twice back-to-back so the loop can be seamless:
+  // once the strip has scrolled exactly one full set's width, we snap the
+  // scroll position back by that width — since the content repeats
+  // identically, the snap is invisible and it looks like it never stops.
+  const loopCats = categories.length > 1 ? [...categories, ...categories] : categories;
+
   useEffect(() => {
     if (!autoSlide || categories.length < 2) return;
-    const timer = setInterval(() => {
+    let last = performance.now();
+    const tick = (now) => {
       const el = scrollRef.current;
-      if (!el || pausedRef.current) return;
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      if (maxScroll <= 0) return;
-      if (el.scrollLeft >= maxScroll - 4) {
-        el.scrollTo({ left: 0, behavior: "smooth" });
-      } else {
-        el.scrollTo({ left: el.scrollLeft + STEP, behavior: "smooth" });
+      if (el && !pausedRef.current) {
+        const dt = (now - last) / 1000;
+        const singleWidth = el.scrollWidth / 2;
+        if (singleWidth > 0) {
+          let next = el.scrollLeft + SPEED_PX_PER_SEC * dt;
+          if (next >= singleWidth) next -= singleWidth;
+          el.scrollLeft = next;
+        }
       }
-    }, 3000);
-    return () => clearInterval(timer);
+      last = now;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
   }, [autoSlide, categories.length]);
 
   const pause = () => {
@@ -704,7 +723,16 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
   };
   const resumeSoon = () => {
     if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
-    resumeTimerRef.current = setTimeout(() => { pausedRef.current = false; }, 1500);
+    resumeTimerRef.current = setTimeout(() => {
+      // fold the scroll position back into the first copy's range so
+      // dragging around doesn't run past the duplicated content
+      const el = scrollRef.current;
+      if (el) {
+        const singleWidth = el.scrollWidth / 2;
+        if (singleWidth > 0) el.scrollLeft = el.scrollLeft % singleWidth;
+      }
+      pausedRef.current = false;
+    }, 1500);
   };
 
   return (
@@ -724,14 +752,14 @@ function InfiniteCategoryStrip({ products, categories, navigate, autoSlide = tru
       onWheel={pause}
     >
       <style>{`.cat-strip::-webkit-scrollbar { display: none; }`}</style>
-      {categories.map((cat) => {
+      {loopCats.map((cat, i) => {
         const count = products.filter((p) => productCats(p).includes(cat.name)).length;
         return (
           <button
-            key={cat.name}
+            key={cat.name + "_" + i}
             onClick={() => navigate(`#/category/${slugify(cat.name)}`)}
             className="flex flex-col items-center gap-1.5 flex-shrink-0"
-            style={{ width: CARD_WIDTH }}
+            style={{ width: 76 }}
           >
             <div
               className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl shadow-sm overflow-hidden"
@@ -1058,7 +1086,7 @@ function ImageCarousel({ images, title, jumpTo }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, copyLink }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, copyLink }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
@@ -1159,10 +1187,30 @@ function ProductView({ productId, products, categories, navigate, onAdd, copyLin
             onAdd(p, size, color);
           }}
           disabled={p.inStock === false}
-          className="flex-1 py-3 rounded-full font-semibold"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.orange, color: "#fff" }}
+          className="flex-1 py-3 rounded-full font-semibold text-sm"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: PALETTE.orange, border: `2px solid ${PALETTE.orange}` }}
         >
           {p.inStock === false ? "স্টক নেই" : "কার্টে দিন"}
+        </button>
+        <button
+          onClick={() => {
+            if (p.inStock === false) return;
+            if (p.sizes && p.sizes.length > 0 && !size) {
+              setSelectionError("অর্ডার করার আগে সাইজ সিলেক্ট করুন");
+              return;
+            }
+            if (p.colors && p.colors.length > 0 && !color) {
+              setSelectionError("অর্ডার করার আগে কালার সিলেক্ট করুন");
+              return;
+            }
+            setSelectionError("");
+            onBuyNow(p, size, color);
+          }}
+          disabled={p.inStock === false}
+          className="flex-1 py-3 rounded-full font-semibold text-sm"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: PALETTE.orange, color: "#fff" }}
+        >
+          {p.inStock === false ? "স্টক নেই" : "এখনই অর্ডার করুন"}
         </button>
         <button onClick={() => copyLink(`#/product/${p.id}`)} className="px-4 rounded-full border flex items-center justify-center" style={{ borderColor: PALETTE.border }} title="লিংক শেয়ার করুন">
           <Share2 size={18} color={PALETTE.blue} />
