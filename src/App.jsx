@@ -308,9 +308,13 @@ export default function App() {
           // New chunked format
           const meta = JSON.parse(metaRes.value);
           const count = meta.count || 1;
+          // Fetch all chunks in parallel instead of one-by-one — this was
+          // the main cause of slow product loading on slower connections.
+          const chunkResults = await Promise.all(
+            Array.from({ length: count }, (_, i) => window.storage.get(`products_${i}`, true))
+          );
           let all = [];
-          for (let i = 0; i < count; i++) {
-            const cres = await window.storage.get(`products_${i}`, true);
+          for (const cres of chunkResults) {
             if (cres && cres.value) all = all.concat(JSON.parse(cres.value));
           }
           setProducts(all);
