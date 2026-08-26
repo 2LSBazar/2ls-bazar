@@ -1295,9 +1295,9 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
       )}
 
       {selectionError && (
-        <p className="text-xs mb-2 font-semibold" style={{ color: "#E2136E" }}>
-          {selectionError}
-        </p>
+        <div className="mb-2 px-3 py-2 rounded-lg text-sm font-bold text-center" style={{ background: "#FDE2E2", color: "#C0392B", border: "1px solid #F5A3A3" }}>
+          ⚠️ {selectionError}
+        </div>
       )}
       <div className="flex items-center gap-2 mt-2">
         <div className="flex items-center rounded-full border overflow-hidden flex-shrink-0" style={{ borderColor: PALETTE.border }}>
