@@ -92,6 +92,13 @@ function slugify(text) {
   return encodeURIComponent(text);
 }
 
+// Border radius for the admin-selectable button shape style.
+function btnRadius(shape) {
+  if (shape === "square") return "4px";
+  if (shape === "rounded") return "12px";
+  return "9999px"; // pill (default)
+}
+
 // Returns a product's category list. New products store an array in `cats`
 // (so one product can appear in several categories). Older products only
 // have a single `cat` string — fall back to that so nothing breaks.
@@ -188,7 +195,7 @@ function useHashRoute() {
   return [hash, navigate];
 }
 
-function ProductCard({ p, onOpen, onAdd, btnColor }) {
+function ProductCard({ p, onOpen, onAdd, btnColor, btnShape, addCartLabel }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
   const discountPct = hasDiscount ? Math.round(((p.price - p.discount) / p.price) * 100) : 0;
   const firstColorImg = p.colorImages && Object.values(p.colorImages)[0];
@@ -229,10 +236,10 @@ function ProductCard({ p, onOpen, onAdd, btnColor }) {
         <button
           onClick={() => !outOfStock && onAdd(p)}
           disabled={outOfStock}
-          className="mt-2 w-full text-xs font-semibold px-3 py-1.5 rounded-full"
-          style={outOfStock ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: btnColor || PALETTE.blue, color: "#fff" }}
+          className="mt-2 w-full text-xs font-semibold px-3 py-1.5"
+          style={outOfStock ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed", borderRadius: btnRadius(btnShape) } : { background: btnColor || PALETTE.blue, color: "#fff", borderRadius: btnRadius(btnShape) }}
         >
-          {outOfStock ? "OUT OF STOCK" : "Add to cart"}
+          {outOfStock ? "OUT OF STOCK" : (addCartLabel || "Add to cart")}
         </button>
       </div>
     </div>
@@ -280,6 +287,9 @@ export default function App() {
   const [orderBtnColor, setOrderBtnColor] = useState("#F5821F");
   const [homeAddCartColor, setHomeAddCartColor] = useState("#144C86");
   const [productAddCartColor, setProductAddCartColor] = useState("#F5821F");
+  const [addCartLabel, setAddCartLabel] = useState("Add To Cart");
+  const [buyNowLabel, setBuyNowLabel] = useState("Buy Now");
+  const [buttonShape, setButtonShape] = useState("pill");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -364,6 +374,18 @@ export default function App() {
         if (pacres && pacres.value) setProductAddCartColor(pacres.value);
       } catch (e) {}
       try {
+        const aclres = await window.storage.get("addCartLabel", true);
+        if (aclres && aclres.value) setAddCartLabel(aclres.value);
+      } catch (e) {}
+      try {
+        const bnlres = await window.storage.get("buyNowLabel", true);
+        if (bnlres && bnlres.value) setBuyNowLabel(bnlres.value);
+      } catch (e) {}
+      try {
+        const bshres = await window.storage.get("buttonShape", true);
+        if (bshres && bshres.value) setButtonShape(bshres.value);
+      } catch (e) {}
+      try {
         const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
@@ -421,6 +443,18 @@ export default function App() {
   const saveProductAddCartColor = async (next) => {
     setProductAddCartColor(next);
     try { await window.storage.set("productAddCartColor", next, true); } catch (e) {}
+  };
+  const saveAddCartLabel = async (next) => {
+    setAddCartLabel(next);
+    try { await window.storage.set("addCartLabel", next, true); } catch (e) {}
+  };
+  const saveBuyNowLabel = async (next) => {
+    setBuyNowLabel(next);
+    try { await window.storage.set("buyNowLabel", next, true); } catch (e) {}
+  };
+  const saveButtonShape = async (next) => {
+    setButtonShape(next);
+    try { await window.storage.set("buttonShape", next, true); } catch (e) {}
   };
   const saveCategories = async (next) => {
     setCategories(next);
@@ -563,17 +597,19 @@ export default function App() {
             navigate={navigate}
             onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])}
             homeAddCartColor={homeAddCartColor}
+            buttonShape={buttonShape}
+            addCartLabel={addCartLabel}
             copyLink={copyLink}
           />
         </>
       )}
 
       {view === "category" && (
-        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} copyLink={copyLink} />
+        <CategoryView category={param} products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} buttonShape={buttonShape} addCartLabel={addCartLabel} copyLink={copyLink} />
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} copyLink={copyLink} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} addCartLabel={addCartLabel} buyNowLabel={buyNowLabel} buttonShape={buttonShape} copyLink={copyLink} />
       )}
 
       {view === "checkout" && (
@@ -592,7 +628,7 @@ export default function App() {
       {view === "done" && <DoneView navigate={navigate} orders={orders} orderId={param} />}
 
       {view === "search" && (
-        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} />
+        <SearchView products={products} navigate={navigate} onAdd={(p) => addToCart(p, p.sizes && p.sizes[0], p.colors && p.colors[0])} homeAddCartColor={homeAddCartColor} buttonShape={buttonShape} addCartLabel={addCartLabel} />
       )}
 
       {view === "track" && (
@@ -600,7 +636,7 @@ export default function App() {
       )}
 
       {view === "admin" && (
-        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} orderBtnColor={orderBtnColor} saveOrderBtnColor={saveOrderBtnColor} homeAddCartColor={homeAddCartColor} saveHomeAddCartColor={saveHomeAddCartColor} productAddCartColor={productAddCartColor} saveProductAddCartColor={saveProductAddCartColor} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
+        <AdminView products={products} orders={orders} banners={banners} bannerStyle={bannerStyle} saveBannerStyle={saveBannerStyle} categoryAutoSlide={categoryAutoSlide} saveCategoryAutoSlide={saveCategoryAutoSlide} orderBtnColor={orderBtnColor} saveOrderBtnColor={saveOrderBtnColor} homeAddCartColor={homeAddCartColor} saveHomeAddCartColor={saveHomeAddCartColor} productAddCartColor={productAddCartColor} saveProductAddCartColor={saveProductAddCartColor} addCartLabel={addCartLabel} saveAddCartLabel={saveAddCartLabel} buyNowLabel={buyNowLabel} saveBuyNowLabel={saveBuyNowLabel} buttonShape={buttonShape} saveButtonShape={saveButtonShape} categories={categories} promoPopup={promoPopup} setPromoPopup={setPromoPopup} saveProducts={saveProducts} saveOrders={saveOrders} saveBanners={saveBanners} saveCategories={saveCategories} navigate={navigate} copyLink={copyLink} />
       )}
 
       {/* Cart drawer */}
@@ -923,7 +959,7 @@ function BannerCarousel({ banners, styleType = "fade" }) {
   );
 }
 
-function SearchView({ products, navigate, onAdd, homeAddCartColor }) {
+function SearchView({ products, navigate, onAdd, homeAddCartColor, buttonShape, addCartLabel }) {
   const [query, setQuery] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -993,7 +1029,7 @@ function SearchView({ products, navigate, onAdd, homeAddCartColor }) {
           <p className="text-xs mb-3" style={{ color: PALETTE.muted }}>{results.length}টা প্রোডাক্ট পাওয়া গেছে</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {results.map((p) => (
-              <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
+              <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} btnShape={buttonShape} addCartLabel={addCartLabel} />
             ))}
           </div>
         </>
@@ -1002,7 +1038,7 @@ function SearchView({ products, navigate, onAdd, homeAddCartColor }) {
   );
 }
 
-function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categories, navigate, onAdd, homeAddCartColor, copyLink }) {
+function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categories, navigate, onAdd, homeAddCartColor, buttonShape, addCartLabel, copyLink }) {
   return (
     <>
       <BannerCarousel banners={banners && banners.length > 0 ? banners : [BANNER]} styleType={bannerStyle} />
@@ -1043,7 +1079,7 @@ function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categorie
               )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {items.map((p) => (
-                  <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
+                  <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} btnShape={buttonShape} addCartLabel={addCartLabel} />
                 ))}
               </div>
             </div>
@@ -1054,7 +1090,7 @@ function HomeView({ products, banners, bannerStyle, categoryAutoSlide, categorie
   );
 }
 
-function CategoryView({ category, products, navigate, onAdd, homeAddCartColor, copyLink }) {
+function CategoryView({ category, products, navigate, onAdd, homeAddCartColor, buttonShape, addCartLabel, copyLink }) {
   const items = products.filter((p) => productCats(p).includes(category));
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -1072,7 +1108,7 @@ function CategoryView({ category, products, navigate, onAdd, homeAddCartColor, c
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {items.map((p) => (
-            <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} />
+            <ProductCard key={p.id} p={p} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={onAdd} btnColor={homeAddCartColor} btnShape={buttonShape} addCartLabel={addCartLabel} />
           ))}
         </div>
       )}
@@ -1159,7 +1195,7 @@ function ImageCarousel({ images, title, jumpTo }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, copyLink }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, addCartLabel, buyNowLabel, buttonShape, copyLink }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
@@ -1284,10 +1320,10 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
             onAdd(p, size, color, qty);
           }}
           disabled={p.inStock === false}
-          className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: productAddCartColor || "#F5821F", border: `2px solid ${productAddCartColor || "#F5821F"}` }}
+          className="flex-1 py-3 font-bold text-sm tracking-wide"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed", borderRadius: btnRadius(buttonShape) } : { background: "#fff", color: productAddCartColor || "#F5821F", border: `2px solid ${productAddCartColor || "#F5821F"}`, borderRadius: btnRadius(buttonShape) }}
         >
-          {p.inStock === false ? "OUT OF STOCK" : "Add To Cart"}
+          {p.inStock === false ? "OUT OF STOCK" : (addCartLabel || "Add To Cart")}
         </button>
         <button
           onClick={() => {
@@ -1304,10 +1340,10 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
             onBuyNow(p, size, color, qty);
           }}
           disabled={p.inStock === false}
-          className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#F5821F", color: "#fff" }}
+          className="flex-1 py-3 font-bold text-sm tracking-wide"
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed", borderRadius: btnRadius(buttonShape) } : { background: orderBtnColor || "#F5821F", color: "#fff", borderRadius: btnRadius(buttonShape) }}
         >
-          {p.inStock === false ? "OUT OF STOCK" : "Order Now"}
+          {p.inStock === false ? "OUT OF STOCK" : (buyNowLabel || "Buy Now")}
         </button>
       </div>
       {p.codEnabled === false && (
@@ -1346,7 +1382,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           </h3>
           <div className="grid grid-cols-2 gap-4">
             {relatedProducts.map((rp) => (
-              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes && pp.sizes[0], pp.colors && pp.colors[0])} btnColor={homeAddCartColor} />
+              <ProductCard key={rp.id} p={rp} onOpen={(pp) => navigate(`#/product/${pp.id}`)} onAdd={(pp) => onAdd(pp, pp.sizes && pp.sizes[0], pp.colors && pp.colors[0])} btnColor={homeAddCartColor} btnShape={buttonShape} addCartLabel={addCartLabel} />
             ))}
           </div>
         </div>
@@ -1646,7 +1682,7 @@ function TrackOrderView({ navigate, orders, initialId }) {
   );
 }
 
-function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, orderBtnColor, saveOrderBtnColor, homeAddCartColor, saveHomeAddCartColor, productAddCartColor, saveProductAddCartColor, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
+function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, categoryAutoSlide, saveCategoryAutoSlide, orderBtnColor, saveOrderBtnColor, homeAddCartColor, saveHomeAddCartColor, productAddCartColor, saveProductAddCartColor, addCartLabel, saveAddCartLabel, buyNowLabel, saveBuyNowLabel, buttonShape, saveButtonShape, categories, promoPopup, setPromoPopup, saveProducts, saveOrders, saveBanners, saveCategories, navigate, copyLink }) {
   const [authed, setAuthed] = useState(false);
   const [pass, setPass] = useState("");
   const [checking, setChecking] = useState(false);
@@ -2260,6 +2296,59 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
               <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{productAddCartColor || "#F5821F"}</span>
               <button type="button" onClick={() => saveProductAddCartColor("#F5821F")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
             </div>
+          </div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>বাটনের লেখা (যেকোনো ভাষায় লিখতে পারো — বাংলা বা ইংরেজি)</label>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs block mb-1" style={{ color: PALETTE.muted }}>"Add To Cart" বাটনের লেখা</label>
+                <input
+                  value={addCartLabel || ""}
+                  onChange={(e) => saveAddCartLabel(e.target.value)}
+                  placeholder="Add To Cart"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ borderColor: PALETTE.border }}
+                />
+              </div>
+              <div>
+                <label className="text-xs block mb-1" style={{ color: PALETTE.muted }}>"Buy Now" বাটনের লেখা</label>
+                <input
+                  value={buyNowLabel || ""}
+                  onChange={(e) => saveBuyNowLabel(e.target.value)}
+                  placeholder="Buy Now"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ borderColor: PALETTE.border }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <label className="text-xs font-medium block mb-2" style={{ color: PALETTE.muted }}>বাটনের ডিজাইন (শেপ)</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {[
+                { v: "pill", label: "পিল (গোল)" },
+                { v: "rounded", label: "কিছুটা গোল" },
+                { v: "square", label: "চারকোনা" },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => saveButtonShape(opt.v)}
+                  className="px-3 py-1.5 text-xs font-semibold border"
+                  style={{
+                    borderRadius: btnRadius(opt.v),
+                    ...((buttonShape || "pill") === opt.v ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border, color: PALETTE.ink }),
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1 py-2 text-center text-xs font-bold text-white" style={{ background: "#F5821F", borderRadius: btnRadius(buttonShape) }}>{buyNowLabel || "Buy Now"}</div>
+              <div className="flex-1 py-2 text-center text-xs font-bold" style={{ background: "#fff", color: "#F5821F", border: "2px solid #F5821F", borderRadius: btnRadius(buttonShape) }}>{addCartLabel || "Add To Cart"}</div>
+            </div>
+            <p className="text-[10px] mt-2" style={{ color: PALETTE.muted }}>প্রিভিউ — উপরের যেকোনো শেপ সিলেক্ট করলেই সাথে সাথে পুরো সাইটের বাটনে প্রযোজ্য হবে</p>
           </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
             <label className="text-xs font-medium block mb-1" style={{ color: PALETTE.muted }}>নতুন ব্যানার ছবি আপলোড করো (একাধিক বেছে নিতে পারো)</label>
