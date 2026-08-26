@@ -346,51 +346,59 @@ export default function App() {
         // try again next time the page loads; the shared storage itself is
         // left untouched.
       }
+      // Fetch all these independent settings/keys in parallel instead of
+      // one-by-one — each was a separate network round trip, and doing them
+      // sequentially was the main remaining cause of slow page loads on
+      // slower connections.
+      const [
+        ores, bres, bsres, casres, obres, hacres, pacres, aclres, bnlres, bshres, cres,
+      ] = await Promise.all([
+        window.storage.get("orders", true).catch(() => null),
+        window.storage.get("banners", true).catch(() => null),
+        window.storage.get("bannerStyle", true).catch(() => null),
+        window.storage.get("categoryAutoSlide", true).catch(() => null),
+        window.storage.get("orderBtnColor", true).catch(() => null),
+        window.storage.get("homeAddCartColor", true).catch(() => null),
+        window.storage.get("productAddCartColor", true).catch(() => null),
+        window.storage.get("addCartLabel", true).catch(() => null),
+        window.storage.get("buyNowLabel", true).catch(() => null),
+        window.storage.get("buttonShape", true).catch(() => null),
+        window.storage.get("categories", true).catch(() => null),
+      ]);
       try {
-        const ores = await window.storage.get("orders", true);
         if (ores && ores.value) setOrders(JSON.parse(ores.value));
       } catch (e) {}
       try {
-        const bres = await window.storage.get("banners", true);
         if (bres && bres.value) {
           const parsed = JSON.parse(bres.value);
           if (parsed && parsed.length > 0) setBanners(parsed);
         }
       } catch (e) {}
       try {
-        const bsres = await window.storage.get("bannerStyle", true);
         if (bsres && bsres.value) setBannerStyle(bsres.value);
       } catch (e) {}
       try {
-        const casres = await window.storage.get("categoryAutoSlide", true);
         if (casres && casres.value) setCategoryAutoSlide(casres.value !== "off");
       } catch (e) {}
       try {
-        const obres = await window.storage.get("orderBtnColor", true);
         if (obres && obres.value) setOrderBtnColor(obres.value);
       } catch (e) {}
       try {
-        const hacres = await window.storage.get("homeAddCartColor", true);
         if (hacres && hacres.value) setHomeAddCartColor(hacres.value);
       } catch (e) {}
       try {
-        const pacres = await window.storage.get("productAddCartColor", true);
         if (pacres && pacres.value) setProductAddCartColor(pacres.value);
       } catch (e) {}
       try {
-        const aclres = await window.storage.get("addCartLabel", true);
         if (aclres && aclres.value) setAddCartLabel(aclres.value);
       } catch (e) {}
       try {
-        const bnlres = await window.storage.get("buyNowLabel", true);
         if (bnlres && bnlres.value) setBuyNowLabel(bnlres.value);
       } catch (e) {}
       try {
-        const bshres = await window.storage.get("buttonShape", true);
         if (bshres && bshres.value) setButtonShape(bshres.value);
       } catch (e) {}
       try {
-        const cres = await window.storage.get("categories", true);
         if (cres && cres.value) {
           const parsed = JSON.parse(cres.value);
           if (parsed && parsed.length > 0) setCategories(parsed);
