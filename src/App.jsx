@@ -204,7 +204,7 @@ function ProductCard({ p, onOpen, onAdd, btnColor, btnShape, addCartLabel }) {
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm relative" style={{ background: PALETTE.card }}>
       <div className="aspect-[4/5] overflow-hidden cursor-pointer relative" onClick={() => onOpen(p)}>
-        <img src={imgSrc} alt={p.title} className="w-full h-full object-cover" style={outOfStock ? { filter: "grayscale(60%)", opacity: 0.7 } : undefined} />
+        <img src={imgSrc} alt={p.title} loading="lazy" className="w-full h-full object-cover" style={outOfStock ? { filter: "grayscale(60%)", opacity: 0.7 } : undefined} />
         {outOfStock && (
           <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#C0392B", color: "#fff" }}>
             স্টক নেই
