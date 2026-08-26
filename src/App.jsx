@@ -556,7 +556,25 @@ export default function App() {
   else if (parts[0] === "track") { view = "track"; param = parts[1] ? decodeURIComponent(parts[1]) : queryId; }
 
   if (!loaded) {
-    return <div style={{ background: PALETTE.bg, minHeight: "100vh" }} />;
+    return (
+      <div
+        style={{ background: PALETTE.bg, minHeight: "100vh" }}
+        className="flex flex-col items-center justify-center gap-4"
+      >
+        <img src={LOGO} alt="2LS Bazar" className="w-20 h-20 object-contain" />
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            border: `4px solid ${PALETTE.border || "#ddd"}`,
+            borderTopColor: PALETTE.orange,
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   return (
