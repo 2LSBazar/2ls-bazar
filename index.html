@@ -4,9 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>2LS Bazar — আপনার অনলাইন মাল্টি-শপ</title>
+
+    <!-- PWA: manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1e5aa8" />
+
+    <!-- PWA: icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+
+    <!-- iOS install support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="2LS Bazar" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- PWA: register service worker -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(console.error);
+        });
+      }
+    </script>
   </body>
 </html>
