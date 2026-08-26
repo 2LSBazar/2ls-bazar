@@ -277,9 +277,9 @@ export default function App() {
   const [banners, setBanners] = useState([BANNER]);
   const [bannerStyle, setBannerStyle] = useState("fade");
   const [categoryAutoSlide, setCategoryAutoSlide] = useState(true);
-  const [orderBtnColor, setOrderBtnColor] = useState("#F5821F");
+  const [orderBtnColor, setOrderBtnColor] = useState("#DC2626");
   const [homeAddCartColor, setHomeAddCartColor] = useState("#144C86");
-  const [productAddCartColor, setProductAddCartColor] = useState("#F5821F");
+  const [productAddCartColor, setProductAddCartColor] = useState("#DC2626");
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [promoPopup, setPromoPopup] = useState({ enabled: false, image: BANNER, category: "শীতের কালেকশন", text: "নতুন কালেকশন এসেছে! এখনই দেখো →" });
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
@@ -1165,15 +1165,6 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
   const [color, setColor] = useState(null);
   const [selectionError, setSelectionError] = useState("");
   const [qty, setQty] = useState(1);
-
-  // Pre-select the first size/color by default so customers don't have to
-  // click before they can order — resets whenever they open a different product.
-  useEffect(() => {
-    setSize(p && p.sizes && p.sizes.length > 0 ? p.sizes[0] : null);
-    setColor(p && p.colors && p.colors.length > 0 ? p.colors[0] : null);
-    setQty(1);
-    setSelectionError("");
-  }, [productId]);
   if (!p) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
@@ -1233,37 +1224,28 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
         )}
       </div>
 
-      {p.sizes && p.sizes.length > 0 && (
-        <div className="mt-5">
-          <p className="text-sm font-semibold mb-1">সাইজ</p>
-          <div className="flex gap-2 flex-wrap">
-            {p.sizes.map((s) => (
-              <button key={s} onClick={() => { setSize(s); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
-                {s}
-              </button>
-            ))}
-          </div>
+      <div className="mt-5">
+        <p className="text-sm font-semibold mb-1">সাইজ</p>
+        <div className="flex gap-2 flex-wrap">
+          {p.sizes.map((s) => (
+            <button key={s} onClick={() => { setSize(s); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={size === s ? { background: PALETTE.blue, color: "#fff", borderColor: PALETTE.blue } : { borderColor: PALETTE.border }}>
+              {s}
+            </button>
+          ))}
         </div>
-      )}
-      {p.colors && p.colors.length > 0 && (
-        <div className="mt-3">
-          <p className="text-sm font-semibold mb-1">কালার</p>
-          <div className="flex gap-2 flex-wrap">
-            {p.colors.map((c) => (
-              <button key={c} onClick={() => { setColor(c); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
-                {c}
-              </button>
-            ))}
-          </div>
+      </div>
+      <div className="mt-3">
+        <p className="text-sm font-semibold mb-1">কালার</p>
+        <div className="flex gap-2 flex-wrap">
+          {p.colors.map((c) => (
+            <button key={c} onClick={() => { setColor(c); setSelectionError(""); }} className="px-3 py-1 rounded-full text-sm border" style={color === c ? { background: PALETTE.orange, color: "#fff", borderColor: PALETTE.orange } : { borderColor: PALETTE.border }}>
+              {c}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {selectionError && (
-        <p className="text-xs mb-2 font-semibold" style={{ color: "#E2136E" }}>
-          {selectionError}
-        </p>
-      )}
-      <div className="flex items-center gap-2 mt-2">
+      <div className="flex items-center gap-2 mt-5">
         <div className="flex items-center rounded-full border overflow-hidden flex-shrink-0" style={{ borderColor: PALETTE.border }}>
           <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-11 flex items-center justify-center text-lg font-bold" style={{ color: PALETTE.ink }}>−</button>
           <span className="w-8 text-center font-semibold text-sm">{qty}</span>
@@ -1285,7 +1267,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           }}
           disabled={p.inStock === false}
           className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: productAddCartColor || "#F5821F", border: `2px solid ${productAddCartColor || "#F5821F"}` }}
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: "#fff", color: productAddCartColor || "#DC2626", border: `2px solid ${productAddCartColor || "#DC2626"}` }}
         >
           {p.inStock === false ? "OUT OF STOCK" : "Add To Cart"}
         </button>
@@ -1305,11 +1287,16 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           }}
           disabled={p.inStock === false}
           className="flex-1 py-3 rounded-full font-bold text-sm tracking-wide"
-          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#F5821F", color: "#fff" }}
+          style={p.inStock === false ? { background: "#D8C9B8", color: "#7A6A58", cursor: "not-allowed" } : { background: orderBtnColor || "#DC2626", color: "#fff" }}
         >
           {p.inStock === false ? "OUT OF STOCK" : "Order Now"}
         </button>
       </div>
+      {selectionError && (
+        <p className="text-xs mt-2 font-medium" style={{ color: "#E2136E" }}>
+          {selectionError}
+        </p>
+      )}
       {p.codEnabled === false && (
         <p className="text-xs mt-2 font-medium" style={{ color: "#E2136E" }}>
           এই প্রোডাক্টে ক্যাশ অন ডেলিভারি নেই — শুধু বিকাশে পেমেন্ট করে অর্ডার করা যাবে।
@@ -2224,13 +2211,13 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={orderBtnColor || "#F5821F"}
+                value={orderBtnColor || "#DC2626"}
                 onChange={(e) => saveOrderBtnColor(e.target.value)}
                 className="w-14 h-10 rounded border"
                 style={{ borderColor: PALETTE.border }}
               />
-              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{orderBtnColor || "#F5821F"}</span>
-              <button type="button" onClick={() => saveOrderBtnColor("#F5821F")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
+              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{orderBtnColor || "#DC2626"}</span>
+              <button type="button" onClick={() => saveOrderBtnColor("#DC2626")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
             </div>
           </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
@@ -2252,13 +2239,13 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={productAddCartColor || "#F5821F"}
+                value={productAddCartColor || "#DC2626"}
                 onChange={(e) => saveProductAddCartColor(e.target.value)}
                 className="w-14 h-10 rounded border"
                 style={{ borderColor: PALETTE.border }}
               />
-              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{productAddCartColor || "#F5821F"}</span>
-              <button type="button" onClick={() => saveProductAddCartColor("#F5821F")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
+              <span className="text-sm font-mono" style={{ color: PALETTE.ink }}>{productAddCartColor || "#DC2626"}</span>
+              <button type="button" onClick={() => saveProductAddCartColor("#DC2626")} className="text-xs font-semibold ml-auto" style={{ color: PALETTE.blue }}>রিসেট</button>
             </div>
           </div>
           <div className="rounded-2xl p-4 mb-5" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
