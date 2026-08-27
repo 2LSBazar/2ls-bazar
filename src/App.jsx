@@ -658,10 +658,10 @@ export default function App() {
     <div style={{ background: PALETTE.bg, color: PALETTE.ink, minHeight: "100vh" }} className="font-[Hind_Siliguri]">
       {/* Header */}
       <header className="sticky top-0 z-30" style={{ background: PALETTE.card, borderBottom: `3px solid ${PALETTE.orange}` }}>
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button onClick={() => setMenuOpen(true)} className="p-2 rounded-full" style={{ background: "#E4EEF8", color: PALETTE.blue }} title="মেনু">
-              <Menu size={20} />
+        <div className="max-w-5xl mx-auto pl-1 pr-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <button onClick={() => setMenuOpen(true)} className="p-1.5" style={{ color: PALETTE.ink }} title="মেনু">
+              <Menu size={22} />
             </button>
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("#/")}>
               <img src={LOGO} alt="2LS Bazar" className="w-10 h-10 object-contain" />
