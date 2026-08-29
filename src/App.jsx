@@ -1431,7 +1431,16 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           );
         })}
       </div>
-      <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
+      <div className="flex items-start justify-between gap-2">
+        <h2 style={{ fontFamily: "'Baloo Da 2', sans-serif" }} className="text-xl font-bold mt-2">{p.title}</h2>
+        <button
+          onClick={() => copyLink(`#/product/${p.id}`)}
+          className="mt-2 flex-shrink-0 flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full"
+          style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }}
+        >
+          <Share2 size={13} /> শেয়ার
+        </button>
+      </div>
       <div className="mt-1 flex items-center gap-2">
         <span className="font-bold text-lg" style={{ color: PALETTE.blue }}><Taka amount={displayPrice} /></span>
         {isDiscounted && <span className="text-sm line-through" style={{ color: "#A9B8C5" }}><Taka amount={originalPrice} /></span>}
