@@ -196,6 +196,15 @@ function useHashRoute() {
   return [hash, navigate];
 }
 
+// Home/category/search grids show a short version of the title (a couple of
+// words) so cards stay compact and square — the full title still shows on
+// the product's own page once opened.
+function shortTitle(title, maxWords = 3) {
+  const words = (title || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return title;
+  return words.slice(0, maxWords).join(" ") + "...";
+}
+
 function ProductCard({ p, onOpen, onAdd, btnColor, btnShape, addCartLabel }) {
   const hasDiscount = p.discount && p.discount > 0 && p.discount < p.price;
   const discountPct = hasDiscount ? Math.round(((p.price - p.discount) / p.price) * 100) : 0;
@@ -204,7 +213,7 @@ function ProductCard({ p, onOpen, onAdd, btnColor, btnShape, addCartLabel }) {
   const outOfStock = p.inStock === false;
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm relative" style={{ background: PALETTE.card }}>
-      <div className="aspect-[4/5] overflow-hidden cursor-pointer relative" onClick={() => onOpen(p)}>
+      <div className="aspect-square overflow-hidden cursor-pointer relative" onClick={() => onOpen(p)}>
         <img src={imgSrc} alt={p.title} loading="lazy" className="w-full h-full object-cover" style={outOfStock ? { filter: "grayscale(60%)", opacity: 0.7 } : undefined} />
         {outOfStock && (
           <span className="absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "#C0392B", color: "#fff" }}>
@@ -223,7 +232,7 @@ function ProductCard({ p, onOpen, onAdd, btnColor, btnShape, addCartLabel }) {
         )}
       </div>
       <div className="p-3">
-        <h3 className="font-semibold text-[14px] leading-snug cursor-pointer" onClick={() => onOpen(p)}>{p.title}</h3>
+        <h3 className="font-semibold text-[14px] leading-snug cursor-pointer truncate" onClick={() => onOpen(p)}>{shortTitle(p.title)}</h3>
         <div className="mt-1 flex items-center gap-2">
           <span className="font-bold text-sm" style={{ color: PALETTE.blue }}>
             <Taka amount={hasDiscount ? p.discount : p.price} />
@@ -755,7 +764,7 @@ export default function App() {
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} addCartLabel={addCartLabel} buyNowLabel={buyNowLabel} buttonShape={buttonShape} copyLink={copyLink} reviews={reviews} saveReviews={saveReviews} customer={customer} customerLogin={customerLogin} customerLogout={customerLogout} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} addCartLabel={addCartLabel} buyNowLabel={buyNowLabel} buttonShape={buttonShape} copyLink={copyLink} reviews={reviews} saveReviews={saveReviews} customer={customer} customerLogout={customerLogout} openAccountModal={() => setAccountModalOpen(true)} />
       )}
 
       {view === "checkout" && (
@@ -1380,7 +1389,7 @@ function AccountForm({ customerLogin, onSuccess }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, addCartLabel, buyNowLabel, buttonShape, copyLink, reviews, saveReviews, customer, customerLogin, customerLogout }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, addCartLabel, buyNowLabel, buttonShape, copyLink, reviews, saveReviews, customer, customerLogout, openAccountModal }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
@@ -1624,10 +1633,11 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
             ধন্যবাদ! আপনার রিভিউ জমা হয়েছে — অ্যাডমিন অনুমোদন করলে এখানে দেখা যাবে।
           </div>
         ) : !customer ? (
-          <div className="rounded-xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-            <p className="text-sm font-semibold mb-2">রিভিউ দিতে রেজিস্ট্রেশন করুন</p>
-            <p className="text-xs mb-3" style={{ color: PALETTE.muted }}>যে নাম্বার দিয়ে অর্ডার করেছেন সেই নাম্বার দিন। একবার করলে এই ডিভাইস থেকে পরের বার আর করতে হবে না।</p>
-            <AccountForm customerLogin={customerLogin} />
+          <div className="rounded-xl p-4 text-center" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <p className="text-sm mb-3" style={{ color: PALETTE.muted }}>রিভিউ দিতে আগে রেজিস্ট্রেশন/লগইন করুন</p>
+            <button onClick={openAccountModal} className="px-5 py-2 rounded-full font-semibold text-sm" style={{ background: PALETTE.blue, color: "#fff" }}>
+              রেজিস্ট্রেশন / লগইন করুন
+            </button>
           </div>
         ) : (
           <div className="rounded-xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
