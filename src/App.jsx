@@ -296,11 +296,33 @@ export default function App() {
   const [promoPopupDismissed, setPromoPopupDismissed] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [customer, setCustomer] = useState(null); // { name, phone } once logged in on this device
   const [loaded, setLoaded] = useState(false);
   const [cart, setCart] = useState({}); // key: productId|size|color -> {qty, size, color, id}
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState("");
   const productChunkCountRef = useRef(1);
+
+  // Restore a remembered customer login (name + phone) for reviews. This is
+  // stored locally on this device only — it's not a real account system,
+  // just a "remember me here" so someone isn't asked for name/phone every
+  // single time they want to review a product on their own phone.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("customer_session");
+      if (saved) setCustomer(JSON.parse(saved));
+    } catch (e) {}
+  }, []);
+
+  const customerLogin = (name, phone) => {
+    const session = { name: name.trim(), phone: phone.trim() };
+    setCustomer(session);
+    try { localStorage.setItem("customer_session", JSON.stringify(session)); } catch (e) {}
+  };
+  const customerLogout = () => {
+    setCustomer(null);
+    try { localStorage.removeItem("customer_session"); } catch (e) {}
+  };
 
   // load from shared storage
   useEffect(() => {
@@ -594,8 +616,8 @@ export default function App() {
       <header className="sticky top-0 z-30" style={{ background: PALETTE.card, borderBottom: `3px solid ${PALETTE.orange}` }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-1">
-            <button onClick={() => setMenuOpen(true)} className="p-2 rounded-full -ml-1" style={{ background: "#E4EEF8", color: PALETTE.blue }} title="মেনু">
-              <Menu size={20} />
+            <button onClick={() => setMenuOpen(true)} className="p-1.5 -ml-2" style={{ color: PALETTE.blue }} title="মেনু">
+              <Menu size={22} />
             </button>
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("#/")}>
             <img src={LOGO} alt="2LS Bazar" className="w-10 h-10 object-contain" />
@@ -654,13 +676,6 @@ export default function App() {
                   <ArrowLeft size={16} style={{ transform: "rotate(180deg)", color: PALETTE.muted }} />
                 </button>
               ))}
-              <button
-                onClick={() => { navigate("#/track"); setMenuOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3.5 border-b text-left font-semibold text-sm"
-                style={{ borderColor: PALETTE.border, color: PALETTE.blue }}
-              >
-                <ClipboardList size={18} /> অর্ডার ট্র্যাক করুন
-              </button>
             </div>
           </div>
         </div>
@@ -695,7 +710,7 @@ export default function App() {
       )}
 
       {view === "product" && (
-        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} addCartLabel={addCartLabel} buyNowLabel={buyNowLabel} buttonShape={buttonShape} copyLink={copyLink} reviews={reviews} saveReviews={saveReviews} />
+        <ProductView productId={param} products={products} categories={categories} navigate={navigate} onAdd={addToCart} onBuyNow={buyNow} orderBtnColor={orderBtnColor} homeAddCartColor={homeAddCartColor} productAddCartColor={productAddCartColor} addCartLabel={addCartLabel} buyNowLabel={buyNowLabel} buttonShape={buttonShape} copyLink={copyLink} reviews={reviews} saveReviews={saveReviews} customer={customer} customerLogin={customerLogin} customerLogout={customerLogout} />
       )}
 
       {view === "checkout" && (
@@ -1281,13 +1296,14 @@ function ImageCarousel({ images, title, jumpTo }) {
   );
 }
 
-function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, addCartLabel, buyNowLabel, buttonShape, copyLink, reviews, saveReviews }) {
+function ProductView({ productId, products, categories, navigate, onAdd, onBuyNow, orderBtnColor, homeAddCartColor, productAddCartColor, addCartLabel, buyNowLabel, buttonShape, copyLink, reviews, saveReviews, customer, customerLogin, customerLogout }) {
   const p = products.find((x) => x.id === productId);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
   const [selectionError, setSelectionError] = useState("");
   const [qty, setQty] = useState(1);
-  const [reviewForm, setReviewForm] = useState({ name: "", phone: "", rating: 5, text: "" });
+  const [loginForm, setLoginForm] = useState({ name: "", phone: "" });
+  const [reviewForm, setReviewForm] = useState({ rating: 5, text: "" });
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [reviewError, setReviewError] = useState("");
 
@@ -1298,7 +1314,7 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
     setColor(null);
     setQty(1);
     setSelectionError("");
-    setReviewForm({ name: "", phone: "", rating: 5, text: "" });
+    setReviewForm({ rating: 5, text: "" });
     setReviewSubmitted(false);
     setReviewError("");
   }, [productId]);
@@ -1336,8 +1352,8 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
   const avgRating = productReviews.length > 0 ? productReviews.reduce((s, r) => s + r.rating, 0) / productReviews.length : 0;
 
   const submitReview = async () => {
-    if (!reviewForm.name.trim() || !reviewForm.phone.trim()) {
-      setReviewError("নাম এবং ফোন নাম্বার দিন");
+    if (!customer) {
+      setReviewError("রিভিউ দিতে আগে লগইন করুন");
       return;
     }
     setReviewError("");
@@ -1345,8 +1361,8 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
       id: `rv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       productId: p.id,
       productTitle: p.title,
-      name: reviewForm.name.trim(),
-      phone: reviewForm.phone.trim(),
+      name: customer.name,
+      phone: customer.phone,
       rating: reviewForm.rating,
       text: reviewForm.text.trim(),
       status: "pending",
@@ -1354,6 +1370,15 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
     };
     await saveReviews([newReview, ...(reviews || [])]);
     setReviewSubmitted(true);
+  };
+
+  const submitCustomerLogin = () => {
+    if (!loginForm.name.trim() || !loginForm.phone.trim()) {
+      setReviewError("নাম এবং ফোন নাম্বার দিন");
+      return;
+    }
+    setReviewError("");
+    customerLogin(loginForm.name, loginForm.phone);
   };
 
   return (
@@ -1524,19 +1549,31 @@ function ProductView({ productId, products, categories, navigate, onAdd, onBuyNo
           <div className="rounded-xl p-4 text-sm font-medium text-center" style={{ background: "#E7F6EC", color: "#1E8449" }}>
             ধন্যবাদ! আপনার রিভিউ জমা হয়েছে — অ্যাডমিন অনুমোদন করলে এখানে দেখা যাবে।
           </div>
+        ) : !customer ? (
+          <div className="rounded-xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <p className="text-sm font-semibold mb-2">রিভিউ দিতে লগইন করুন</p>
+            <p className="text-xs mb-3" style={{ color: PALETTE.muted }}>একবার লগইন করলে এই ডিভাইস থেকে পরের বার আর করতে হবে না।</p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input placeholder="আপনার নাম" value={loginForm.name} onChange={(e) => setLoginForm((f) => ({ ...f, name: e.target.value }))} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: PALETTE.border }} />
+              <input placeholder="ফোন নাম্বার" value={loginForm.phone} onChange={(e) => setLoginForm((f) => ({ ...f, phone: e.target.value }))} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: PALETTE.border }} />
+            </div>
+            {reviewError && <p className="text-xs font-semibold mb-2" style={{ color: "#C0392B" }}>⚠️ {reviewError}</p>}
+            <button onClick={submitCustomerLogin} className="px-5 py-2 rounded-full font-semibold text-sm" style={{ background: PALETTE.blue, color: "#fff" }}>
+              লগইন করুন
+            </button>
+          </div>
         ) : (
           <div className="rounded-xl p-4" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
-            <p className="text-sm font-semibold mb-2">রিভিউ লিখুন</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold">রিভিউ লিখুন</p>
+              <button onClick={customerLogout} className="text-xs" style={{ color: PALETTE.muted }}>{customer.name} নয়? লগআউট</button>
+            </div>
             <div className="flex items-center gap-1 mb-3">
               {Array.from({ length: 5 }, (_, i) => (
                 <button key={i} onClick={() => setReviewForm((f) => ({ ...f, rating: i + 1 }))}>
                   <Star size={22} fill={i < reviewForm.rating ? PALETTE.orange : "none"} color={PALETTE.orange} />
                 </button>
               ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <input placeholder="আপনার নাম" value={reviewForm.name} onChange={(e) => setReviewForm((f) => ({ ...f, name: e.target.value }))} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: PALETTE.border }} />
-              <input placeholder="ফোন নাম্বার" value={reviewForm.phone} onChange={(e) => setReviewForm((f) => ({ ...f, phone: e.target.value }))} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: PALETTE.border }} />
             </div>
             <textarea placeholder="আপনার মতামত লিখুন (অপশনাল)" value={reviewForm.text} onChange={(e) => setReviewForm((f) => ({ ...f, text: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-lg border text-sm mb-2" style={{ borderColor: PALETTE.border }} />
             {reviewError && <p className="text-xs font-semibold mb-2" style={{ color: "#C0392B" }}>⚠️ {reviewError}</p>}
