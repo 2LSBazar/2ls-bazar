@@ -1981,6 +1981,8 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
   const [tab, setTab] = useState("products");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm());
+  const [productSearch, setProductSearch] = useState("");
+  const [openCats, setOpenCats] = useState({});
   const [uploading, setUploading] = useState(false);
   const [colorImages, setColorImages] = useState({}); // { colorName: imageUrl }
   const [sizePriceForm, setSizePriceForm] = useState({}); // { sizeName: { price: "string", discount: "string" } }
@@ -2450,14 +2452,28 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
             </div>
           </div>
 
-          <div className="space-y-2">
-            {products.map((p) => {
+          <div className="rounded-2xl p-3 mb-4 flex items-center gap-2" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+            <Search size={16} color={PALETTE.muted} />
+            <input
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              placeholder="প্রোডাক্টের নাম দিয়ে সার্চ করুন..."
+              className="flex-1 text-sm outline-none"
+            />
+            {productSearch && (
+              <button onClick={() => setProductSearch("")}><X size={16} color={PALETTE.muted} /></button>
+            )}
+          </div>
+
+          {(() => {
+            const q = productSearch.trim().toLowerCase();
+            const ProductRow = ({ p }) => {
               const outOfStock = p.inStock === false;
               const toggleStock = async () => {
                 await saveProducts(products.map((x) => (x.id === p.id ? { ...x, inStock: !x.inStock } : x)));
               };
               return (
-                <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+                <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
                   <img src={p.images && p.images.length > 0 ? p.images[0] : `https://picsum.photos/seed/${p.seed || p.id}/80/100`} className="w-10 h-12 object-cover rounded" alt={p.title} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{p.title}</p>
@@ -2471,8 +2487,59 @@ function AdminView({ products, orders, banners, bannerStyle, saveBannerStyle, ca
                   <button onClick={() => remove(p.id)} className="p-2 rounded-full" style={{ background: "#FCE4E4" }} title="ডিলিট"><Trash2 size={14} color="#C0392B" /></button>
                 </div>
               );
-            })}
-          </div>
+            };
+
+            // While searching: ignore folders entirely, just show matches —
+            // this is the fast path for "find one product and edit it".
+            if (q) {
+              const matches = products.filter((p) => (p.title || "").toLowerCase().includes(q));
+              return (
+                <div className="space-y-2">
+                  {matches.length === 0 && <p className="text-sm text-center py-6" style={{ color: PALETTE.muted }}>কোনো প্রোডাক্ট পাওয়া যায়নি।</p>}
+                  {matches.map((p) => <ProductRow key={p.id} p={p} />)}
+                </div>
+              );
+            }
+
+            // No search: group into a folder per category, like the app's
+            // menu, so a category with 90 products doesn't bury everything
+            // else in one long scroll.
+            const uncategorized = products.filter((p) => productCats(p).length === 0 || !productCats(p).some((cn) => categories.some((c) => c.name === cn)));
+            const folders = categories.map((c) => ({
+              name: c.name,
+              icon: c.icon,
+              items: products.filter((p) => productCats(p).includes(c.name)),
+            }));
+            if (uncategorized.length > 0) folders.push({ name: "ক্যাটাগরি মিলছে না", icon: "❓", items: uncategorized });
+
+            return (
+              <div className="space-y-2">
+                {folders.map((f) => {
+                  const open = !!openCats[f.name];
+                  return (
+                    <div key={f.name} className="rounded-xl overflow-hidden" style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}` }}>
+                      <button
+                        onClick={() => setOpenCats((m) => ({ ...m, [f.name]: !m[f.name] }))}
+                        className="w-full flex items-center justify-between px-4 py-3"
+                      >
+                        <span className="flex items-center gap-2 font-semibold text-sm">
+                          <span>{f.icon || "🛍️"}</span> {f.name}
+                          <span className="text-xs font-normal px-2 py-0.5 rounded-full" style={{ background: PALETTE.orangeSoft, color: PALETTE.orange }}>{f.items.length}</span>
+                        </span>
+                        <ArrowLeft size={16} style={{ transform: open ? "rotate(90deg)" : "rotate(-90deg)", color: PALETTE.muted, transition: "transform 0.15s" }} />
+                      </button>
+                      {open && (
+                        <div className="px-3 pb-3 space-y-2">
+                          {f.items.length === 0 && <p className="text-xs text-center py-3" style={{ color: PALETTE.muted }}>এই ক্যাটাগরিতে কোনো প্রোডাক্ট নেই।</p>}
+                          {f.items.map((p) => <ProductRow key={p.id} p={p} />)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </>
       )}
 
